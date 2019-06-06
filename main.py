@@ -12,6 +12,10 @@ def create_model(data, timesteps):
     es = solph.EnergySystem(timeindex=timesteps)
     Node.registry = es
 
+
+
+
+
     # Data Manipulation
     data = data
 
@@ -29,28 +33,49 @@ def create_model(data, timesteps):
                          outputs={b_gas: solph.Flow(
                              nominal_value=200)})
 
+    s_shortage_el = solph.Source(label='shortage_el',
+                         outputs={b_elec: solph.Flow(
+                             variable_costs=200)})
+
+    s_wind = solph.Source(label='wind',
+                          outputs={b_elec: solph.Flow(
+                              actual_value=data['wind'],
+                              fixed=True,
+                              nominal_value=100)})
+
+
 
 
     # Create Sink
     demand = solph.Sink(label='demand',
                         inputs={b_elec: solph.Flow(
-                            actual_value=150,
+                            actual_value=data['demand_el'],
                             fixed=True,
-                            nominal_value=1)})
+                            nominal_value=10e10)})
+
+
+
+
+    # excess variable
+    excess = solph.Sink(label='excess_el', inputs={b_elec: solph.Flow()})
+
+
+
 
     # Create Transformer
+
     cfp = solph.Transformer(label='pp_coal',
                             inputs={b_coal: solph.Flow()},
                             outputs={b_elec: solph.Flow(
                                 variable_costs=50)},
                             conversion_factors={b_elec: 0.5})
 
+
     gfp = solph.Transformer(label='pp_gas',
                             inputs={b_gas: solph.Flow()},
                             outputs={b_elec: solph.Flow(
-                                variable_costs = 100)},
-                            conversion_factors={b_elec: 0.6}
-                            )
+                                variable_costs=100)},
+                               conversion_factors={b_elec: 0.6})
 
 
     # Create Model
@@ -73,8 +98,11 @@ def create_model(data, timesteps):
 
 if __name__ == '__main__':
     # Input Data & Timesteps
-    data = None
-    timesteps = 3
+
+    # Provide Data
+    filename = os.path.join(os.path.dirname(__file__), 'input_data.csv')
+    data = pd.read_csv(filename, sep=",")
+    timesteps = 1
 
     # Create & Solve Model
     model = create_model(data, timesteps)
@@ -84,9 +112,11 @@ if __name__ == '__main__':
     es.restore(dpath=None, filename=None)
 
     # Show Results
+
     b_coal = outputlib.views.node(es.results['main'], 'bus_coal')
     b_gas = outputlib.views.node(es.results['main'], 'bus_gas')
     b_elec = outputlib.views.node(es.results['main'], 'bus_elec')
+
 
     print('-----------------------------------------------------')
     print('Bus Coal\n', b_coal['sequences'])
@@ -96,3 +126,5 @@ if __name__ == '__main__':
     print('Bus Elec\n', b_elec['sequences'])
     print('-----------------------------------------------------')
     print('OBJ: ', model.objective())
+
+    #import pdb;    pdb.set_trace()
