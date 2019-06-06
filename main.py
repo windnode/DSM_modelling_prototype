@@ -32,8 +32,8 @@ def create_model(data, timesteps):
                             fixed=True,
                             nominal_value=1)})
 
-    # Create Heat Pump
-    chp = solph.Transformer(label='pp_coal',
+    # Create Transformer
+    transf = solph.Transformer(label='pp_coal',
                             inputs={b_coal: solph.Flow()},
                             outputs={b_elec: solph.Flow(
                                 variable_costs=50)},
