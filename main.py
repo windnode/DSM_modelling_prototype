@@ -26,7 +26,7 @@ def create_model(data, timesteps):
                           outputs={b_coal: solph.Flow(
                               nominal_value=200)})
     s_gas = solph.Source(label='source_gas',
-                         outputs={b_coal: solph.Flow(
+                         outputs={b_gas: solph.Flow(
                              nominal_value=200)})
 
 
@@ -34,7 +34,7 @@ def create_model(data, timesteps):
     # Create Sink
     demand = solph.Sink(label='demand',
                         inputs={b_elec: solph.Flow(
-                            actual_value=100,
+                            actual_value=150,
                             fixed=True,
                             nominal_value=1)})
 
@@ -85,10 +85,13 @@ if __name__ == '__main__':
 
     # Show Results
     b_coal = outputlib.views.node(es.results['main'], 'bus_coal')
+    b_gas = outputlib.views.node(es.results['main'], 'bus_gas')
     b_elec = outputlib.views.node(es.results['main'], 'bus_elec')
 
     print('-----------------------------------------------------')
     print('Bus Coal\n', b_coal['sequences'])
+    print('-----------------------------------------------------')
+    print('Bus Gas\n',  b_gas['sequences'])
     print('-----------------------------------------------------')
     print('Bus Elec\n', b_elec['sequences'])
     print('-----------------------------------------------------')
