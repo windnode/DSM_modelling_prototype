@@ -25,7 +25,7 @@ def create_model(data, timesteps):
     s_coal = solph.Source(label='source_coal',
                           outputs={b_coal: solph.Flow(
                               nominal_value=200)})
-    s.gas = solph.Source(label='source_gas',
+    s_gas = solph.Source(label='source_gas',
                          outputs={b_coal: solph.Flow(
                              nominal_value=200)})
 
