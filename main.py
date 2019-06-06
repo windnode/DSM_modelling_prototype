@@ -17,6 +17,7 @@ def create_model(data, timesteps):
 
     # Create Busses
     b_coal = solph.Bus(label='bus_coal')
+    b_gas  = solph.Bus(label='bus_gas')
     b_elec = solph.Bus(label='bus_elec')
 
 
@@ -24,6 +25,11 @@ def create_model(data, timesteps):
     s_coal = solph.Source(label='source_coal',
                           outputs={b_coal: solph.Flow(
                               nominal_value=200)})
+    s.gas = solph.Source(label='source_gas',
+                         outputs={b_coal: solph.Flow(
+                             nominal_value=200)})
+
+
 
     # Create Sink
     demand = solph.Sink(label='demand',
@@ -33,11 +39,19 @@ def create_model(data, timesteps):
                             nominal_value=1)})
 
     # Create Transformer
-    transf = solph.Transformer(label='pp_coal',
+    cfp = solph.Transformer(label='pp_coal',
                             inputs={b_coal: solph.Flow()},
                             outputs={b_elec: solph.Flow(
                                 variable_costs=50)},
                             conversion_factors={b_elec: 0.5})
+
+    gfp = solph.Transformer(label='pp_gas',
+                            inputs={b_gas: solph.Flow()},
+                            outputs={b_elec: solph.Flow(
+                                variable_costs = 100)},
+                            conversion_factors={b_elec: 0.6}
+                            )
+
 
     # Create Model
     m = solph.Model(es)
