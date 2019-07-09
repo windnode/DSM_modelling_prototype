@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 ##########
 
 
-def create_model(df_data, timesteps):
+def create_model(df_data,df_dsm,  timesteps):
 
 	m = ConcreteModel()
 
@@ -27,8 +27,11 @@ def create_model(df_data, timesteps):
 	m.n = 1	# Zerrahn Parameter eta (---)
 	m.R = 1	# Zerrahn Parameter Recovery (Hours)
 
-	m.Cdo = 40 # Zerrahn Parameter DSM Capacity down (MWh) -> Demand-shift up
-	m.Cup = 40 # Zerrahn Parameter DSM Capacity up(MWh) -> Demand-shift down
+	#m.Cdo = 40 # Zerrahn Parameter DSM Capacity down (MWh) -> Demand-shift up
+	#m.Cup = 40 # Zerrahn Parameter DSM Capacity up(MWh) -> Demand-shift down
+
+
+
 
 	m.DSMdo = Var(m.tm, m.Tm, initialize=0, within=NonNegativeReals)	# Zerrahn Variable load shift down (MWh)
 
@@ -39,6 +42,9 @@ def create_model(df_data, timesteps):
 	factor_demand = 200
 	temp = df_data.demand_el[:timesteps + 1] * factor_demand
 	m.Demand = temp.tolist()  # Demand from input_data
+
+	m.Cdo = (df_dsm.Cap_do*1000).round().tolist()
+	m.Cup = (df_dsm.Cap_up*1000).round().tolist()
 
 	m.C = [0, 10, 20, 40]  # Cost constant of all Power Generators, P1, P2, P3, ...
 
@@ -81,7 +87,7 @@ def dsmup_constraint_rule(m, t):
 
 	# Equation 8
 
-	return m.DSMup[t] <= m.Cup
+	return m.DSMup[t] <= m.Cup[t-1]
 
 
 def dsmdo_constraint_rule(m, T):
@@ -89,30 +95,30 @@ def dsmdo_constraint_rule(m, T):
 	# Equation 9
 	if T <= m.L:
 		return sum(m.DSMdo[t, T] for t in range(1, T+1+m.L)) \
-			<= m.Cdo
+			<= m.Cdo[T-1]
 
 	elif m.L+1 <= T <= timesteps+1 - m.L:
 		return sum(m.DSMdo[t, T] for t in range(T-m.L, T+1+m.L)) \
-			<= m.Cdo
+			<= m.Cdo[T-1]
 
 	else:
 		return sum(m.DSMdo[t, T] for t in range(T-m.L, timesteps+2)) \
-			<= m.Cdo
+			<= m.Cdo[T-1]
 
 
 def C2_constraint_rule(m, T):
 
 	# Equation 10
 	if T <= m.L:
-		return max(m.Cup, m.Cdo) \
+		return max(m.Cup[T-1], m.Cdo[T-1]) \
 			>= m.DSMup[T] + sum(m.DSMdo[t, T] for t in range(1, T+1+m.L))
 
 	elif m.L+1 <= T <= timesteps - m.L:
-		return max(m.Cup, m.Cdo) \
+		return max(m.Cup[T-1], m.Cdo[T-1]) \
 			>= m.DSMup[T] + sum(m.DSMdo[t, T] for t in range(T-m.L, T+1+m.L))
 
 	else:
-		return max(m.Cup, m.Cdo) \
+		return max(m.Cup[T-1], m.Cdo[T-1]) \
 			>= m.DSMup[T] + sum(m.DSMdo[t, T] for t in range(T-m.L, timesteps+2))
 
 
@@ -121,10 +127,10 @@ def dsmup2_constraint_rule(m, t):
 	# Equation 11
 	if t + m.R <= timesteps+2:
 		return sum(m.DSMup[t] for t in range(t, t+m.R)) \
-			<= m.Cup * m.L
+			<= sum(m.Cup [t] for t in range(t,  t+m.R))
 	else:
 		return sum(m.DSMup[t] for t in range(t, timesteps+2)) \
-			<= m.Cup * m.L
+			<= sum(m.Cup [t] for t in range(t,  timesteps+2))
 
 
 ####################################################################################
@@ -239,6 +245,8 @@ def output(m):
 
 	fig, ax1 = plt.subplots()
 
+
+
 	# Demands
 
 	ax1.plot(df.Demand[:timesteps], label='Demand', linestyle='--')
@@ -246,6 +254,8 @@ def output(m):
 	# Demands +- DSM
 
 	ax1.plot(df.Demand[:timesteps] + df.DSM_tot, label='new_Demand')#, linestyle='--')
+
+
 
 	# Generation fossil
 
@@ -276,7 +286,13 @@ def output(m):
 	ax2.bar(range(timesteps+1),  df.DSM_delayed, alpha=0.7, color='firebrick', label='DSM_delayed')
 	ax2.bar(range(timesteps+1), df.DSM_tot, alpha=0.7, label='DSM', color='darkorange')
 
-	fig.legend(loc=9, ncol=4)
+	# Capacity DSM
+
+	ax2.scatter(range(timesteps+1), [i * -1 for i in m.Cdo[:timesteps+1]], marker='_', color='darkorange', label='DSM_Capacity')
+	ax2.scatter(range(timesteps+1), m.Cup[:timesteps+1], marker='_', color='darkorange')
+
+
+	fig.legend(loc=9, ncol=5)
 	align_yaxis(ax1,60, ax2,0)
 	#plt.grid()
 
@@ -291,11 +307,13 @@ def output(m):
 # START
 
 df_data = pd.read_csv('input_data.csv', sep = ",")
+df_dsm = pd.read_csv('dsm_capacity_timeseries.csv')
 
-timesteps = 200
+
+timesteps = 50
 
 
-m = create_model(df_data, timesteps)
+m = create_model(df_data, df_dsm,  timesteps)
 
 
 # Constraints
