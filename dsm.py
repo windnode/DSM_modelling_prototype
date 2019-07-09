@@ -196,26 +196,30 @@ def obj_expression_demand(m):
 '''
 ##############################################################################
 # 									HELP PRINT
-def align_yaxis(ax1, v1, ax2, v2):
-    """adjust ax2 ylimit so that v2 in ax2 is aligned to v1 in ax1"""
-    _, y1 = ax1.transData.transform((0, v1))
-    _, y2 = ax2.transData.transform((0, v2))
-    adjust_yaxis(ax2,(y1-y2)/2,v2)
-    adjust_yaxis(ax1,(y2-y1)/2,v1)
 
-def adjust_yaxis(ax,ydif,v):
-    """shift axis ax by ydiff, maintaining point v at the same location"""
-    inv = ax.transData.inverted()
-    _, dy = inv.transform((0, 0)) - inv.transform((0, ydif))
-    miny, maxy = ax.get_ylim()
-    miny, maxy = miny - v, maxy - v
-    if -miny>maxy or (-miny==maxy and dy > 0):
-        nminy = miny
-        nmaxy = miny*(maxy+dy)/(miny+dy)
-    else:
-        nmaxy = maxy
-        nminy = maxy*(miny+dy)/(maxy+dy)
-    ax.set_ylim(nminy+v, nmaxy+v)
+
+def align_yaxis(ax1, v1, ax2, v2):
+	"""adjust ax2 ylimit so that v2 in ax2 is aligned to v1 in ax1"""
+	_, y1 = ax1.transData.transform((0, v1))
+	_, y2 = ax2.transData.transform((0, v2))
+	adjust_yaxis(ax2, (y1 - y2) / 2, v2)
+	adjust_yaxis(ax1, (y2 - y1) / 2, v1)
+
+
+def adjust_yaxis(ax, ydif, v):
+	"""shift axis ax by ydiff, maintaining point v at the same location"""
+	inv = ax.transData.inverted()
+	_, dy = inv.transform((0, 0)) - inv.transform((0, ydif))
+	miny, maxy = ax.get_ylim()
+	miny, maxy = miny - v, maxy - v
+	if -miny > maxy or (-miny == maxy and dy > 0):
+		nminy = miny
+		nmaxy = miny*(maxy+dy)/(miny+dy)
+	else:
+		nmaxy = maxy
+		nminy = maxy * (miny + dy) / (maxy + dy)
+	ax.set_ylim(nminy+v, nmaxy+v)
+
 
 def output(m):
 
@@ -227,7 +231,6 @@ def output(m):
 	output_P2 = []
 	output_P3 = []
 	output_delay = []
-
 
 	# Pyomo Var index do start with 1
 	for i in range(1, timesteps+2):
@@ -267,9 +270,6 @@ def output(m):
 	ax1.plot(df.Demand[:timesteps], label='Demand')
 	ax1.plot(df.Demand[:timesteps]-df.DSM_tot, label='new_Demand')
 
-	#plt.yticks(range(60,140, 10))
-	#plt.xticks(range(1,31, 2))
-
 	# Generation + DSM accumulated
 
 	plt.fill_between(range(timesteps+1), 0, df.P1, alpha=0.5,  label='P1', color='black')
@@ -277,12 +277,14 @@ def output(m):
 	plt.fill_between(range(timesteps + 1), df.P1+df.P2, df.P1 + df.P2 + df.P3, alpha=0.5, label='P3', color='brown')
 	plt.fill_between(range(timesteps+1), df.P3 + df.P2 + df.P1, df.P3 + df.P2 + df.P1 + df.DSM_tot, alpha=0.5,  label='DSM', color='yellow')
 	plt.yticks(range(0, round(max(df.Demand) * 1.1), 10))
-	# 2nc scale
+
+
 	plt.grid()
+
+	# 2nc scale
+
 	ax2 = ax1.twinx()
 
-	#plt.fill_between(range(30), 0, df.DSM_tot, alpha=0.5, label='DSM')
-	#plt.yticks(range(-30,30,10))
 
 	# DSM only
 
