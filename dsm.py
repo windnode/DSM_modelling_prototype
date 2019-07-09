@@ -287,6 +287,15 @@ def output(m):
 	ax2.bar(range(timesteps+1), df.DSM_tot, alpha=0.7, label='DSM', color='darkorange')
 
 	# Capacity DSM
+	'''
+	fig_capdo = [i * -1 for i in m.Cdo[:timesteps + 1]]
+	fig_capup =  m.Cup[:timesteps+1]
+	fig_capup[df.DSM_tot.tolist() == 0] = 0
+	fig_capdo[df.DSM_tot.tolist() == 0] = 0	
+	
+	ax2.scatter(range(timesteps+1), fig_capdo, marker='_', color='darkorange', label='DSM_Capacity')
+	ax2.scatter(range(timesteps+1), fig_capup, marker='_', color='darkorange')
+	'''
 
 	ax2.scatter(range(timesteps+1), [i * -1 for i in m.Cdo[:timesteps+1]], marker='_', color='darkorange', label='DSM_Capacity')
 	ax2.scatter(range(timesteps+1), m.Cup[:timesteps+1], marker='_', color='darkorange')
@@ -310,7 +319,7 @@ df_data = pd.read_csv('input_data.csv', sep = ",")
 df_dsm = pd.read_csv('dsm_capacity_timeseries.csv')
 
 
-timesteps = 50
+timesteps = 120
 
 
 m = create_model(df_data, df_dsm,  timesteps)
