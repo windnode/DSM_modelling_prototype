@@ -15,17 +15,17 @@ def create_model(df_data, timesteps):
 
 	m = ConcreteModel()
 
-	m.L = 3 # Delay Time (Hours)
-	m.n = 1	# Zerrahn Parameter eta (---)
-	m.R = 1	# Zerrahn Parameter Recovery (Hours)
-
 	# I defined "t" and "T" from 1 to 30
 	# L = 3, Cdo & Cup = 10, also from paper
 	# n and R = 1, no idea about the real values of these parameters.
 	# All variables and letters are the same with the ones in paper.
 
-	m.tm = RangeSet(1, timesteps + 1, 1) # TimePeriod  (Hours)
-	m.Tm = RangeSet(1, timesteps + 1, 1) # TimePeriod (Hours)(in paper tt)
+	m.tm = RangeSet(1,timesteps+1,1) # TimePeriod  (Hours)
+	m.Tm = RangeSet(1,timesteps+1,1) # TimePeriod (Hours)(in paper tt)
+
+	m.L = 3 # Delay Time (Hours)
+	m.n = 1	# Zerrahn Parameter eta (---)
+	m.R = 1	# Zerrahn Parameter Recovery (Hours)
 
 	m.Cdo = 40 # Zerrahn Parameter DSM Capacity down (MWh) -> Demand-shift up
 	m.Cup = 40 # Zerrahn Parameter DSM Capacity up(MWh) -> Demand-shift down
@@ -35,20 +35,25 @@ def create_model(df_data, timesteps):
 
 	#################### For OBJECTIVE
 
+	#m.Demand = [80,80,80,80,80,80,80,120,120,120,120,120,120,130,130,120,120,120,120,120,120,80,80,80,80,80,80,80,80,80, 80] #Demand
+
+	#m.Demand = [80,80,80,80,80,80,80,120,120,120,120,120,120,120,120,120,120,120,120,120,120,80,80,80,80,80,80,80,80,80]
+
 	factor_demand = 200
-	temp = df_data.demand_el[:timesteps+1] * factor_demand
+	temp = df_data.demand_el[:timesteps + 1] * factor_demand
 	m.Demand = temp.tolist()  # Demand from input_data
 
-	m.C = [0, 10, 40, 20]  # Cost constant of all Power Generators, P1, P2, P3, ...
+	m.C = [0, 10, 20, 40]  # Cost constant of all Power Generators, P1, P2, P3, ...
 
-	m.Cap = [100, 80, 100, 50]  # Capacity of all Generators Wind/PV, P1, P2, P3, ...
+	m.Cap = [100, 50, 70, 70]  # Capacity of all Generators Wind/PV, P1, P2, P3, ...
 
 	m.Wind = (df_data.wind * m.Cap[0]).round().tolist()
 	m.PV = (df_data.pv * m.Cap[0]).round().tolist()
-	#m.Wind = Var(m.tm, initialize=0, within=NonNegativeReals)
+
 	m.P1 = Var(m.tm, initialize=0, within=NonNegativeReals) # Power Generator 1 (cheap)
 	m.P2 = Var(m.tm, initialize=0, within=NonNegativeReals) # Power Generator 2 (expensive)
-
+	m.P3 = Var(m.tm, initialize=0, within=NonNegativeReals) # Power Gen Backup (super expensive)
+	#m.Wind = Var(m.tm, initialize=0, within=NonNegativeReals)
 
 
 
@@ -130,38 +135,21 @@ def dsmup2_constraint_rule(m, t):
 ####################################################################################
 #                             DEMAND CONSTRAINTS
 
-#'''
+
 def demand_constraint_rule(m, t):
 
 	if t <= m.L:
-		return m.P1[t] + m.P2[t] \
+		return m.P1[t] + m.P2[t] + m.P3[t] \
 			>= m.Demand[t-1] + m.DSMup[t] - sum(m.DSMdo[T, t] for T in range(1, t+m.L+1))
 
 	elif m.L+1 <= t <= timesteps+1 - m.L:
-		return m.P1[t] + m.P2[t] \
+		return m.P1[t] + m.P2[t] + m.P3[t] \
 			>= m.Demand[t-1] + m.DSMup[t] - sum(m.DSMdo[T, t] for T in range(t-m.L, t+1+m.L))
 
 	else:
-		return m.P1[t] + m.P2[t]  \
+		return m.P1[t] + m.P2[t] + m.P3[t] \
 			>= m.Demand[t-1] + m.DSMup[t] - sum(m.DSMdo[T, t] for T in range(t-m.L, timesteps+2))
-'''
 
-
-def demand_constraint_rule(m, t):
-
-	if t <= m.L:
-		return m.P1[t] + m.P2[t] + m.Wind[t-1] + m.PV[t-1] \
-			>= m.Demand[t-1] - m.DSMup[t] + sum(m.DSMdo[T, t] for T in range(1, t+m.L+1))
-
-	elif m.L+1 <= t <= timesteps + 1 - m.L:
-		return m.P1[t] + m.P2[t] + m.Wind[t-1] + m.PV[t-1] \
-			>= m.Demand[t-1] - m.DSMup[t] + sum(m.DSMdo[T, t] for T in range(t-m.L, t+1+m.L))
-
-	else:
-		return m.P1[t] + m.P2[t] + m.Wind[t-1] + m.PV[t-1] \
-			>= m.Demand[t-1] - m.DSMup[t] + sum(m.DSMdo[T, t] for T in range(t-m.L, timesteps+2))
-
-'''
 
 def power1_constraint_rule(m, t):
 
@@ -173,6 +161,10 @@ def power2_constraint_rule(m, t):
 	return m.P2[t] <= m.Cap[2]
 
 
+def power3_constraint_rule(m, t):
+
+	return m.P3[t] <= m.Cap[3]
+
 '''
 def powerWind_constraint_rule(m, t, data):
 
@@ -183,7 +175,7 @@ def powerWind_constraint_rule(m, t, data):
 
 def obj_expression_cost(m):
 
-	return summation(m.P1) * m.C[1] + summation(m.P2) * m.C[2]
+	return summation(m.P1) * m.C[1] + summation(m.P2) * m.C[2] + summation(m.P3) * m.C[3]
 
 
 #########################################################################
@@ -191,7 +183,7 @@ def obj_expression_cost(m):
 '''
 def obj_expression_cost_dsm(m):
 
-	return summation(m.P1) * m.C[1] + summation(m.P2) * m.C[2] + summation(m.DSMup) * m.C[2] + summation(m.DSMdo) * m.C[2]
+	return summation(m.P1) * m.C[0] + summation(m.P2) * m.C[1] + summation(m.DSMup) * m.C[2] + summation(m.DSMdo) * m.C[2]
 
 
 def obj_expression_demand(m):
@@ -226,15 +218,7 @@ def adjust_yaxis(ax, ydif, v):
 	ax.set_ylim(nminy+v, nmaxy+v)
 
 
-def output(m, **kwargs):
-
-	figsave = False
-
-	for key, value in kwargs.items():
-		if key == 'fig':
-			figsave = value
-
-
+def output(m):
 
 	# extract data from pyomo variables
 
@@ -242,7 +226,7 @@ def output(m, **kwargs):
 	output_DSMup = []
 	output_P1 = []
 	output_P2 = []
-
+	output_P3 = []
 	output_delay = []
 
 	# Pyomo Var index do start with 1
@@ -251,7 +235,7 @@ def output(m, **kwargs):
 		output_DSMup.append(m.DSMup[i].value)
 		output_P1.append(m.P1[i].value)
 		output_P2.append(m.P2[i].value)
-
+		output_P3.append(m.P3[i].value)
 
 		test_num = 0
 
@@ -260,73 +244,64 @@ def output(m, **kwargs):
 			test_num += m.DSMdo[ii, i].value
 
 		output_DSMdo.append(test_num)
-		output_delay.append( - sum(output_DSMup) + sum(output_DSMdo))
+		output_delay.append(- sum(output_DSMup) + sum(output_DSMdo))
 
 	# create DataFrame
 
 	df = pd.DataFrame()
 	df['Demand'] = pd.Series(m.Demand).round()
-	df['Wind'] = pd.Series(m.Wind).round()
-	df['PV'] = pd.Series(m.PV).round()
 	df['P1'] = pd.Series(output_P1).round()
 	df['P2'] = pd.Series(output_P2).round()
-	#df['P3'] = pd.Series(output_P3).round()
+	df['P3'] = pd.Series(output_P3).round()
 	df['DSM_tot'] = (pd.Series(output_DSMup) - pd.Series(output_DSMdo)).round()
 	df['DSMdo'] = pd.Series(output_DSMdo).round()
 	df['DSMup'] = pd.Series(output_DSMup).round()
 	df['DSM_delayed'] = pd.Series(output_delay).round()
 
 	# create Plot
-	if figsave:
 
-		fig, ax1 = plt.subplots()
+	fig, ax1 = plt.subplots()
 
-		# Demand
+	# Demands
 
-		ax1.plot(df.Demand[:timesteps], label='Demand', linestyle='--', color = 'blue')
+	ax1.plot(df.Demand[:timesteps], label='Demand', linestyle='--')
 
-		# Demand +- DSM
+	# Demands +- DSM
 
-		ax1.plot(df.Demand[:timesteps] + df.DSM_tot, label='new_Demand', color='black')
+	ax1.plot(df.Demand[:timesteps] + df.DSM_tot, label='new_Demand')#, linestyle='--')
 
-		# Generation fossil
+	# Generation
 
-		plt.fill_between(range(timesteps+1), 0, df.P1, alpha=0.5,  label='P1', color='black')
-		plt.fill_between(range(timesteps+1), df.P1, df.P2+df.P1, alpha=0.5,  label='P2' , color='grey')
-
-		# Generation RE
-
-		'''
-		plt.fill_between(range(timesteps + 1), df.P1 + df.P2, df.P1 + df.P2 + df.Wind, alpha=0.5, label='Wind',
-						 color='lightblue')
-		plt.fill_between(range(timesteps + 1), df.P1 + df.P2 + df.Wind, df.P1 + df.P2 + df.Wind + df.PV, alpha=0.5, label='PV',
-						 color='orange')
-		'''
-
-		# DSM filling
-
-		#plt.fill_between(range(timesteps+1), df.Demand, df.Demand + df.DSM_tot, alpha=0.5,  label='DSM', color='red')
-
-		plt.yticks(range(0, round(max(df.Demand) * 1.1), 10))
+	plt.fill_between(range(timesteps+1), 0, df.P1, alpha=0.5,  label='P1', color='black')
+	plt.fill_between(range(timesteps+1), df.P1, df.P2+df.P1, alpha=0.5,  label='P2' , color='grey')
+	plt.fill_between(range(timesteps + 1), df.P1+df.P2, df.P1 + df.P2 + df.P3, alpha=0.5, label='P3', color='brown')
 
 
-		plt.grid()
+	# DSM work
 
-		# 2nc scale
+	#plt.fill_between(range(timesteps+1), df.P3 + df.P2 + df.P1, df.P3 + df.P2 + df.P1 + df.DSM_tot, alpha=0.5,  label='DSM', color='yellow')
+	plt.fill_between(range(timesteps+1), df.Demand, df.Demand + df.DSM_tot, alpha=0.5,  label='DSM', color='yellow')
 
-		ax2 = ax1.twinx()
+	plt.yticks(range(0, round(max(df.Demand) * 1.1), 10))
 
 
-		# DSM only
+	plt.grid()
 
-		ax2.bar(range(timesteps+1),  df.DSM_delayed, alpha=0.5, color='green', label='DSM_delayed')
-		ax2.bar(range(timesteps+1), df.DSM_tot, alpha=0.5, color='red')
+	# 2nc scale
 
-		fig.legend(loc=9, ncol=4)
-		align_yaxis(ax1,60, ax2,0)
-		#plt.grid()
+	ax2 = ax1.twinx()
 
-		fig.savefig('DSM.png', bbox_inches='tight')
+
+	# DSM only
+
+	ax2.bar(range(timesteps+1),  df.DSM_delayed, alpha=0.5, color='green', label='DSM_delayed')
+	ax2.bar(range(timesteps+1), df.DSM_tot, alpha=0.5, color='yellow')
+
+	fig.legend(loc=9, ncol=4)
+	align_yaxis(ax1,60, ax2,0)
+	#plt.grid()
+
+	fig.savefig('DSM.png', bbox_inches='tight')
 
 	return print(df)
 
@@ -338,16 +313,13 @@ def output(m, **kwargs):
 
 df_data = pd.read_csv('input_data.csv', sep = ",")
 
-timesteps = 40
+timesteps = 120
 
 
 m = create_model(df_data, timesteps)
 
 
 # Constraints
-
-
-
 
 # Demand
 m.demandConstraint = Constraint(m.tm, rule=demand_constraint_rule)
@@ -364,15 +336,10 @@ m.C2Constraint = Constraint(m.Tm, rule=C2_constraint_rule)
 # Equation 11
 m.dsmup2Constraint = Constraint(m.tm, rule=dsmup2_constraint_rule)
 
-
-
-
 # Power
 m.power1Constraint = Constraint(m.tm, rule=power1_constraint_rule)
 m.power2Constraint = Constraint(m.tm, rule=power2_constraint_rule)
-
-
-
+m.power3Constraint = Constraint(m.tm, rule=power3_constraint_rule)
 
 #m.powerWindConstraint = Constraint(m.tm, rule=powerWind_constraint_rule)
 
@@ -393,9 +360,7 @@ result = optim.solve(m, tee=False)
 print('Objective:', m.obj())
 
 
-output(m, fig=True)
-
-
+output(m)
 
 
 filename = os.path.join(os.path.dirname(__file__), 'model.lp')
