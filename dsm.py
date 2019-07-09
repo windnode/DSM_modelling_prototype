@@ -45,14 +45,14 @@ def create_model(df_data, timesteps):
 
 	m.C = [0, 10, 20, 40]  # Cost constant of all Power Generators, P1, P2, P3, ...
 
-	m.Cap = [100, 50, 70, 70]  # Capacity of all Generators Wind/PV, P1, P2, P3, ...
+	m.Cap = [100, 100, 100, 70]  # Capacity of all Generators Wind/PV, P1, P2, P3, ...
 
 	m.Wind = (df_data.wind * m.Cap[0]).round().tolist()
 	m.PV = (df_data.pv * m.Cap[0]).round().tolist()
 
 	m.P1 = Var(m.tm, initialize=0, within=NonNegativeReals) # Power Generator 1 (cheap)
 	m.P2 = Var(m.tm, initialize=0, within=NonNegativeReals) # Power Generator 2 (expensive)
-	m.P3 = Var(m.tm, initialize=0, within=NonNegativeReals) # Power Gen Backup (super expensive)
+	#m.P3 = Var(m.tm, initialize=0, within=NonNegativeReals) # Power Gen Backup (super expensive)
 	#m.Wind = Var(m.tm, initialize=0, within=NonNegativeReals)
 
 
@@ -135,7 +135,7 @@ def dsmup2_constraint_rule(m, t):
 ####################################################################################
 #                             DEMAND CONSTRAINTS
 
-
+'''
 def demand_constraint_rule(m, t):
 
 	if t <= m.L:
@@ -150,6 +150,34 @@ def demand_constraint_rule(m, t):
 		return m.P1[t] + m.P2[t] + m.P3[t] \
 			>= m.Demand[t-1] + m.DSMup[t] - sum(m.DSMdo[T, t] for T in range(t-m.L, timesteps+2))
 
+def demand_constraint_rule(m, t):
+
+	if t <= m.L:
+		return m.P1[t] + m.P2[t] + m.P3[t] + m.Wind[t-1] + m.PV[t-1] \
+			>= m.Demand[t-1] + m.DSMup[t] - sum(m.DSMdo[T, t] for T in range(1, t+m.L+1))
+
+	elif m.L+1 <= t <= timesteps+1 - m.L:
+		return m.P1[t] + m.P2[t] + m.P3[t] + m.Wind[t-1] + m.PV[t-1]  \
+			>= m.Demand[t-1] + m.DSMup[t] - sum(m.DSMdo[T, t] for T in range(t-m.L, t+1+m.L))
+
+	else:
+		return m.P1[t] + m.P2[t] + m.P3[t] + m.Wind[t-1] + m.PV[t-1] \
+			>= m.Demand[t-1] + m.DSMup[t] - sum(m.DSMdo[T, t] for T in range(t-m.L, timesteps+2))
+ '''
+
+def demand_constraint_rule(m, t):
+
+	if t <= m.L:
+		return m.P1[t] + m.P2[t] + m.Wind[t-1] + m.PV[t-1] \
+			>= m.Demand[t-1] + m.DSMup[t] - sum(m.DSMdo[T, t] for T in range(1, t+m.L+1))
+
+	elif m.L+1 <= t <= timesteps+1 - m.L:
+		return m.P1[t] + m.P2[t] + m.Wind[t-1] + m.PV[t-1]  \
+			>= m.Demand[t-1] + m.DSMup[t] - sum(m.DSMdo[T, t] for T in range(t-m.L, t+1+m.L))
+
+	else:
+		return m.P1[t] + m.P2[t] + m.Wind[t-1] + m.PV[t-1] \
+			>= m.Demand[t-1] + m.DSMup[t] - sum(m.DSMdo[T, t] for T in range(t-m.L, timesteps+2))
 
 def power1_constraint_rule(m, t):
 
@@ -160,12 +188,12 @@ def power2_constraint_rule(m, t):
 
 	return m.P2[t] <= m.Cap[2]
 
-
+'''
 def power3_constraint_rule(m, t):
 
 	return m.P3[t] <= m.Cap[3]
 
-'''
+
 def powerWind_constraint_rule(m, t, data):
 
 	return m.Wind[t] == m.CapWind * data.wind[t]
@@ -175,7 +203,7 @@ def powerWind_constraint_rule(m, t, data):
 
 def obj_expression_cost(m):
 
-	return summation(m.P1) * m.C[1] + summation(m.P2) * m.C[2] + summation(m.P3) * m.C[3]
+	return summation(m.P1) * m.C[1] + summation(m.P2) * m.C[2] #+ summation(m.P3) * m.C[3]
 
 
 #########################################################################
@@ -235,7 +263,7 @@ def output(m):
 		output_DSMup.append(m.DSMup[i].value)
 		output_P1.append(m.P1[i].value)
 		output_P2.append(m.P2[i].value)
-		output_P3.append(m.P3[i].value)
+		#output_P3.append(m.P3[i].value)
 
 		test_num = 0
 
@@ -250,9 +278,14 @@ def output(m):
 
 	df = pd.DataFrame()
 	df['Demand'] = pd.Series(m.Demand).round()
+	df['Wind'] = pd.Series(m.Wind).round()
+	df['PV'] = pd.Series(m.PV).round()
+
 	df['P1'] = pd.Series(output_P1).round()
 	df['P2'] = pd.Series(output_P2).round()
-	df['P3'] = pd.Series(output_P3).round()
+
+	#df['P3'] = pd.Series(output_P3).round()
+
 	df['DSM_tot'] = (pd.Series(output_DSMup) - pd.Series(output_DSMdo)).round()
 	df['DSMdo'] = pd.Series(output_DSMdo).round()
 	df['DSMup'] = pd.Series(output_DSMup).round()
@@ -270,17 +303,21 @@ def output(m):
 
 	ax1.plot(df.Demand[:timesteps] + df.DSM_tot, label='new_Demand')#, linestyle='--')
 
-	# Generation
+	# Generation fossil
 
-	plt.fill_between(range(timesteps+1), 0, df.P1, alpha=0.5,  label='P1', color='black')
-	plt.fill_between(range(timesteps+1), df.P1, df.P2+df.P1, alpha=0.5,  label='P2' , color='grey')
-	plt.fill_between(range(timesteps + 1), df.P1+df.P2, df.P1 + df.P2 + df.P3, alpha=0.5, label='P3', color='brown')
+	plt.fill_between(range(timesteps+1), 0, df.P1, alpha=0.5,  label='P1', facecolor='black')
+	plt.fill_between(range(timesteps+1), df.P1, df.P2+df.P1, alpha=0.5,  label='P2' , facecolor='grey')
+	#plt.fill_between(range(timesteps + 1), df.P1+df.P2, df.P1 + df.P2 + df.P3, alpha=0.5, label='P3', facecolor='brown')
 
+	plt.fill_between(range(timesteps + 1), df.P1 + df.P2, df.P1 + df.P2 + df.Wind, alpha=0.5, label='Wind',
+					 facecolor='darkcyan')
+	plt.fill_between(range(timesteps + 1), df.P1 + df.P2 + df.Wind, df.P1 + df.P2 + df.Wind + df.PV, alpha=0.5, label='PV',
+					 facecolor='gold')
 
 	# DSM work
 
 	#plt.fill_between(range(timesteps+1), df.P3 + df.P2 + df.P1, df.P3 + df.P2 + df.P1 + df.DSM_tot, alpha=0.5,  label='DSM', color='yellow')
-	plt.fill_between(range(timesteps+1), df.Demand, df.Demand + df.DSM_tot, alpha=0.5,  label='DSM', color='yellow')
+	#plt.fill_between(range(timesteps+1), df.Demand, df.Demand + df.DSM_tot, alpha=0.5,  label='DSM', color='lightcoral')
 
 	plt.yticks(range(0, round(max(df.Demand) * 1.1), 10))
 
@@ -294,8 +331,8 @@ def output(m):
 
 	# DSM only
 
-	ax2.bar(range(timesteps+1),  df.DSM_delayed, alpha=0.5, color='green', label='DSM_delayed')
-	ax2.bar(range(timesteps+1), df.DSM_tot, alpha=0.5, color='yellow')
+	ax2.bar(range(timesteps+1),  df.DSM_delayed, alpha=0.7, color='firebrick', label='DSM_delayed')
+	ax2.bar(range(timesteps+1), df.DSM_tot, alpha=0.7, label='DSM', color='darkorange')
 
 	fig.legend(loc=9, ncol=4)
 	align_yaxis(ax1,60, ax2,0)
@@ -313,7 +350,7 @@ def output(m):
 
 df_data = pd.read_csv('input_data.csv', sep = ",")
 
-timesteps = 120
+timesteps = 200
 
 
 m = create_model(df_data, timesteps)
@@ -339,7 +376,7 @@ m.dsmup2Constraint = Constraint(m.tm, rule=dsmup2_constraint_rule)
 # Power
 m.power1Constraint = Constraint(m.tm, rule=power1_constraint_rule)
 m.power2Constraint = Constraint(m.tm, rule=power2_constraint_rule)
-m.power3Constraint = Constraint(m.tm, rule=power3_constraint_rule)
+#m.power3Constraint = Constraint(m.tm, rule=power3_constraint_rule)
 
 #m.powerWindConstraint = Constraint(m.tm, rule=powerWind_constraint_rule)
 
