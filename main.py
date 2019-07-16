@@ -53,9 +53,14 @@ def create_model(data, timesteps):
                             fixed=True,
                             nominal_value=10e10)})
 
-
-
-
+    #'''
+    demand_neg  = solph.Sink(label='demand_neg',
+                             inputs={b_elec: solph.Flow(
+                                 actual_value=0.1,
+                                 fixed=True,
+                                 nominal_value=-10e10
+                             )})
+    #'''
     # excess variable
     excess = solph.Sink(label='excess_el', inputs={b_elec: solph.Flow()})
 
@@ -100,7 +105,7 @@ if __name__ == '__main__':
     # Input Data & Timesteps
 
     # Provide Data
-    filename = os.path.join(os.path.dirname(__file__), 'input_data.csv')
+    filename = os.path.join(os.path.dirname(__file__), './Input/input_data.csv')
     data = pd.read_csv(filename, sep=",")
     timesteps = 1
 

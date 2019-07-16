@@ -74,7 +74,7 @@ def dsmupdo_constraint_rule(m, t):
 		return sum(m.DSMdo[t, T] for T in range(1, t+1+m.L)) \
 			== m.DSMup[t] * m.n
 
-	elif m.L+1 <= t <= timesteps - m.L: # and t <= timesteps - m.L:
+	elif m.L+1 <= t <= timesteps - m.L:
 		return sum(m.DSMdo[t, T] for T in range(t-m.L, t+1+m.L)) \
 			== m.DSMup[t] * m.n
 
@@ -127,15 +127,14 @@ def dsmup2_constraint_rule(m, t):
 	# Equation 11
 	if t + m.R <= timesteps+2:
 		return sum(m.DSMup[t] for t in range(t, t+m.R)) \
-			<= sum(m.Cup [t] for t in range(t,  t+m.R))
+			<= sum(m.Cup[t] for t in range(t,  t+m.R))
 	else:
 		return sum(m.DSMup[t] for t in range(t, timesteps+2)) \
-			<= sum(m.Cup [t] for t in range(t,  timesteps+2))
+			<= sum(m.Cup[t] for t in range(t,  timesteps+2))
 
 
 ####################################################################################
 #                             DEMAND CONSTRAINTS
-
 
 
 def demand_constraint_rule(m, t):
@@ -151,6 +150,7 @@ def demand_constraint_rule(m, t):
 	else:
 		return m.P1[t] + m.P2[t] + m.Wind[t-1] + m.PV[t-1] \
 			>= m.Demand[t-1] + m.DSMup[t] - sum(m.DSMdo[T, t] for T in range(t-m.L, timesteps+2))
+
 
 def power1_constraint_rule(m, t):
 
@@ -198,8 +198,7 @@ def adjust_yaxis(ax, ydif, v):
 
 
 def output(m):
-
-	# extract data from pyomo variables
+	''' Extract data fro Pyomo Variables in DataFrames and plot for visualization'''
 
 	output_DSMdo = []
 	output_DSMup = []
@@ -241,11 +240,9 @@ def output(m):
 	df['DSMup'] = pd.Series(output_DSMup).round()
 	df['DSM_delayed'] = pd.Series(output_delay).round()
 
-	# create Plot
+	# create Figure
 
 	fig, ax1 = plt.subplots()
-
-
 
 	# Demands
 
@@ -254,8 +251,6 @@ def output(m):
 	# Demands +- DSM
 
 	ax1.plot(df.Demand[:timesteps] + df.DSM_tot, label='new_Demand')#, linestyle='--')
-
-
 
 	# Generation fossil
 
@@ -267,7 +262,6 @@ def output(m):
 					 facecolor='gold')
 
 	# DSM work
-
 	#plt.fill_between(range(timesteps+1), df.P3 + df.P2 + df.P1, df.P3 + df.P2 + df.P1 + df.DSM_tot, alpha=0.5,  label='DSM', color='yellow')
 	#plt.fill_between(range(timesteps+1), df.Demand, df.Demand + df.DSM_tot, alpha=0.5,  label='DSM', color='lightcoral')
 
@@ -279,7 +273,6 @@ def output(m):
 	# 2nc scale
 
 	ax2 = ax1.twinx()
-
 
 	# DSM only
 
@@ -300,7 +293,6 @@ def output(m):
 	ax2.scatter(range(timesteps+1), [i * -1 for i in m.Cdo[:timesteps+1]], marker='_', color='darkorange', label='DSM_Capacity')
 	ax2.scatter(range(timesteps+1), m.Cup[:timesteps+1], marker='_', color='darkorange')
 
-
 	fig.legend(loc=9, ncol=5)
 	align_yaxis(ax1,60, ax2,0)
 	#plt.grid()
@@ -315,8 +307,10 @@ def output(m):
 
 # START
 
-df_data = pd.read_csv('input_data.csv', sep = ",")
-df_dsm = pd.read_csv('dsm_capacity_timeseries.csv')
+df_data = pd.read_csv('Input/input_data.csv', sep = ",")
+df_dsm = pd.read_csv('dsm_capacity_timeseries.csv')#, sep = ",")
+#df_dsm = pd.read_csv('Input/dsm_capacity_random_timeseries.csv', sep = ",", encoding='utf-8')
+
 
 
 timesteps = 120
@@ -340,7 +334,7 @@ m.dsmdoConstraint = Constraint(m.Tm, rule=dsmdo_constraint_rule)
 # Equation 10
 m.C2Constraint = Constraint(m.Tm, rule=C2_constraint_rule)
 # Equation 11
-m.dsmup2Constraint = Constraint(m.tm, rule=dsmup2_constraint_rule)
+#m.dsmup2Constraint = Constraint(m.tm, rule=dsmup2_constraint_rule)
 
 # Power
 m.power1Constraint = Constraint(m.tm, rule=power1_constraint_rule)
