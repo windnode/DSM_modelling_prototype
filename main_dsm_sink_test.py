@@ -5,23 +5,20 @@ import os
 from pyomo.core.base.block import SimpleBlock
 from pyomo.environ import (Binary, Set, NonNegativeReals, Var, Constraint,
                            Expression, BuildAction, Piecewise)
-
+from oemof.solph import sequence as solph_sequence
 
 class SinkDsm(solph.Sink):
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, demand, c_up, c_do, l_dsm,  *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.c_up = kwargs.get('c_up', None)
-        self.c_do = kwargs.get('c_do', None)
-        self.l_dsm = kwargs.get('l_dsm', None)
-        self.demand = kwargs.get('demand', None)
+        self.c_up = c_up
+        self.c_do = c_do
+        self.l_dsm = l_dsm
+        self.demand = solph_sequence(demand)
 
     def constraint_group(self):
         return SinkDsmBlock
-
-    def show_input(self):
-        return print(self.c_up)
 
 
 class SinkDsmBlock(SimpleBlock):
@@ -41,13 +38,26 @@ class SinkDsmBlock(SimpleBlock):
         for n in group:
             n.inflow = list(n.inputs)[0]
 
+        #  ************* SETS *********************************
+
+        self.DSM = Set(initialize=[n for n in group])
+
+        #  ************* VARIABLES *****************************
+
+        self.DSMdo = Var(self.DSM, m.TIMESTEPS, m.TIMESTEPS, initialize=0, within=NonNegativeReals)  # Zerrahn Variable load shift down (MWh)
+
+        self.DSMup = Var(self.DSM, m.TIMESTEPS, initialize=0, within=NonNegativeReals)  # Zerrahn Variable load shift up(MWh)
+
+
+        #  ************* CONSTRAINTS *****************************
+
         def _input_output_relation_rule(block):
             """Connection between input and internal demand.
             """
             for t in m.TIMESTEPS:
                 for g in group:
                     lhs = m.flow[g.inflow, g, t]
-                    rhs = g.demand[t]
+                    rhs = g.demand[t] + 20
                     block.input_output_relation.add((g, t), (lhs == rhs))
 
         self.input_output_relation = Constraint(group, m.TIMESTEPS,
@@ -86,19 +96,14 @@ def create_model(data, timesteps):
                                variable_costs=50)},
                            conversion_factors={b_elec: 0.5})
 
-    # # Create Sink
-    # demand = solph.Sink(label='demand',
-    #                     inputs={b_elec: solph.Flow(
-    #                         actual_value=data['demand_el'],
-    #                         fixed=True,
-    #                         nominal_value=100)})
+
 
     # Create DSM sink
     demand_dsm = SinkDsm(label='demand_dsm',
                          inputs={b_elec: solph.Flow()},
-                         c_up = 2,
-                         c_do = 2,
-                         l_dsm = 2,
+                         c_up = [2],
+                         c_do = [2],
+                         l_dsm = [2],
                          demand=data['demand_el'] * 100)
 
 
@@ -139,9 +144,7 @@ es.restore(dpath=None, filename=None)
 b_coal = outputlib.views.node(model.es.results['main'], 'bus_coal')
 b_elec = outputlib.views.node(model.es.results['main'], 'bus_elec')
 b_dsm = outputlib.views.node(es.results['main'], 'demand_dsm')
-b_demand = outputlib.views.node(es.results['main'], 'demand')
-b_wind = outputlib.views.node(es.results['main'], 'wind')
-b_shortage = outputlib.views.node(es.results['main'], 'shortage_el')
+
 
 #print('-----------------------------------------------------')
 #print('Bus Coal\n', b_coal['sequences'])
@@ -155,11 +158,9 @@ print('OBJ: ', model.objective())
 print('-----------------------------------------------------')
 print(b_dsm['sequences'])
 print('-----------------------------------------------------')
-print(b_demand['sequences'])
+print(b_elec['sequences'].iloc[:,0])
 print('-----------------------------------------------------')
-print(b_wind['sequences'])
-print('-----------------------------------------------------')
-print(b_shortage['sequences'])
+print(b_elec['sequences'].iloc[:,1])
 
 #results = outputlib.processing.results(model)
 #print(type(list(results)[0]))
