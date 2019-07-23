@@ -12,8 +12,8 @@ class SinkDsm(solph.Sink):
     def __init__(self, demand, c_up, c_do, l_dsm,  *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.c_up = c_up
-        self.c_do = c_do
+        self.c_up = solph_sequence(c_up)
+        self.c_do = solph_sequence(c_do)
         self.l_dsm = l_dsm
         self.demand = solph_sequence(demand)
 
@@ -44,6 +44,7 @@ class SinkDsmBlock(SimpleBlock):
 
         #  ************* VARIABLES *****************************
 
+
         self.DSMdo = Var(self.DSM, m.TIMESTEPS, m.TIMESTEPS, initialize=0, within=NonNegativeReals)  # Zerrahn Variable load shift down (MWh)
 
         self.DSMup = Var(self.DSM, m.TIMESTEPS, initialize=0, within=NonNegativeReals)  # Zerrahn Variable load shift up(MWh)
@@ -56,14 +57,68 @@ class SinkDsmBlock(SimpleBlock):
             """
             for t in m.TIMESTEPS:
                 for g in group:
-                    lhs = m.flow[g.inflow, g, t]
-                    rhs = g.demand[t] + 20
-                    block.input_output_relation.add((g, t), (lhs == rhs))
+
+                    if t <= g.l_dsm:
+
+                        lhs = m.flow[g.inflow, g, t]
+                        rhs = g.demand[t] + self.DSMup[g, t] - sum(
+                            self.DSMdo[g, t, T] for T in range(1, t + g.l_dsm+1))
+                        block.input_output_relation.add((g, t), (lhs == rhs))
+
+                    elif g.l_dsm < t <= m.TIMESTEPS._bounds[1] - g.l_dsm:
+
+                        lhs = m.flow[g.inflow, g, t]
+                        rhs = g.demand[t] + self.DSMup[g, t] - sum(
+                            self.DSMdo[g, t, T] for T in range(t-g.l_dsm, t + g.l_dsm + 1))
+                        block.input_output_relation.add((g, t), (lhs == rhs))
+
+                    else:
+
+                        lhs = m.flow[g.inflow, g, t]
+                        rhs = g.demand[t] + self.DSMup[g, t] - sum(
+                            self.DSMdo[g, t, T] for T in range(t - g.l_dsm, m.TIMESTEPS._bounds[1] + 1))
+                        block.input_output_relation.add((g, t), (lhs == rhs))
+
 
         self.input_output_relation = Constraint(group, m.TIMESTEPS,
                                                 noruleinit=True)
         self.input_output_relation_build = BuildAction(
             rule=_input_output_relation_rule)
+
+        # Equation 7'
+        # Eq. 7 and 7' is the same, only one difference, which is "efficiency factor n".
+        # # m.n == efficiency factor set to "n=1"
+
+        def dsmupdo_constraint_rule(block):
+            for t in m.TIMESTEPS:
+                for g in group:
+
+                    if t <= g.l_dsm:
+                        return sum(self.DSMdo[g, t, T] for T in range(1, t + g.l_dsm + 1))\
+                               == self.DSMup[g, t] # * m.n
+
+                    elif g.l_dsm < t <= m.TIMESTEPS._bounds[1] - g.l_dsm:
+
+                        return sum(self.DSMdo[g, t, T] for T in range(t - g.l_dsm, t + g.l_dsm + 1))\
+                               == m.DSMup[t] # * m.n
+
+                    else:
+                        return sum(self.DSMdo[g, t, T] for T in range(t - g.l_dsm, m.TIMESTEPS._bounds[1]+2))\
+                               == self.DSMup[g, t] # * m.n
+
+        self.dsmupdo_constraint = Constraint(group, m.TIMESTEPS,
+                                                noruleinit=True)
+        self.dsmupdo_constraint_build = BuildAction(
+            rule= dsmupdo_constraint_rule)
+
+        # Equation 8
+
+        #def dsmup_constraint_rule(block):
+
+
+
+            #return self.DSMup[g, t] <= m.Cup[t-1]
+
 
 
 #################################################################
@@ -101,9 +156,9 @@ def create_model(data, timesteps):
     # Create DSM sink
     demand_dsm = SinkDsm(label='demand_dsm',
                          inputs={b_elec: solph.Flow()},
-                         c_up = [2],
-                         c_do = [2],
-                         l_dsm = [2],
+                         c_up=data['C_up'] * 10,
+                         c_do=data['C_do'] * 10,
+                         l_dsm=3,
                          demand=data['demand_el'] * 100)
 
 
@@ -130,8 +185,8 @@ def create_model(data, timesteps):
 
 # Provide Data
 filename = os.path.join(os.path.dirname(__file__), './Input/input_data.csv')
-data = pd.read_csv(filename, sep=",")
-timesteps = 1
+data = pd.read_csv(filename, sep=",", dtype=float)
+timesteps = 10
 
 # Create & Solve Model
 model = create_model(data, timesteps)
@@ -154,13 +209,28 @@ print('OBJ: ', model.objective())
 #print('-----------------------------------------------------')
 #print('Bus Elec\n', b_elec['sequences'])
 
+dsmdo = []
+dsmup = []
+for k in range(timesteps):
+    dsmdo.append(b_dsm['sequences'].iloc[k, 1:-1].sum())
+    dsmup.append(b_dsm['sequences'].iloc[k, -1])
+
+
+
+df_output = pd.DataFrame(data = dsmdo, columns=['DSM_do'])
+df_output['demand'] = data.demand_el.iloc[:timesteps]*100
 
 print('-----------------------------------------------------')
-print(b_dsm['sequences'])
+print(b_dsm['sequences'].iloc[:, 0])
 print('-----------------------------------------------------')
-print(b_elec['sequences'].iloc[:,0])
+print(b_elec['sequences'].iloc[:, 0])
 print('-----------------------------------------------------')
-print(b_elec['sequences'].iloc[:,1])
+print(b_elec['sequences'].iloc[:, 1])
+print('-----------------------------------------------------')
+print(df_output)
+print(dsmup)
+#print('-----------------------------------------------------')
+#print(b_elec['sequences'].iloc[:, 2])
 
 #results = outputlib.processing.results(model)
 #print(type(list(results)[0]))
