@@ -7,6 +7,15 @@ from pyomo.environ import (Binary, Set, NonNegativeReals, Var, Constraint,
                            Expression, BuildAction, Piecewise)
 from oemof.solph import sequence as solph_sequence
 
+
+#import modelprint as mp
+
+
+
+
+########################################################################
+# ----------------------- DSM Component --------------------------------
+
 class SinkDsm(solph.Sink):
 
     def __init__(self, demand, c_up, c_do, l_dsm,  *args, **kwargs):
@@ -34,7 +43,6 @@ class SinkDsmBlock(SimpleBlock):
 
         m = self.parent_block()
 
-
         for n in group:
             n.inflow = list(n.inputs)[0]
 
@@ -44,11 +52,9 @@ class SinkDsmBlock(SimpleBlock):
 
         #  ************* VARIABLES *****************************
 
-
         self.DSMdo = Var(self.DSM, m.TIMESTEPS, m.TIMESTEPS, initialize=0, within=NonNegativeReals)  # Zerrahn Variable load shift down (MWh)
 
         self.DSMup = Var(self.DSM, m.TIMESTEPS, initialize=0, within=NonNegativeReals)  # Zerrahn Variable load shift up(MWh)
-
 
         #  ************* CONSTRAINTS *****************************
 
@@ -62,7 +68,7 @@ class SinkDsmBlock(SimpleBlock):
 
                         lhs = m.flow[g.inflow, g, t]
                         rhs = g.demand[t] + self.DSMup[g, t] - sum(
-                            self.DSMdo[g, t, T] for T in range(1, t + g.l_dsm+1))
+                            self.DSMdo[g, t, T] for T in range(t + g.l_dsm + 1))
                         block.input_output_relation.add((g, t), (lhs == rhs))
 
                     elif g.l_dsm < t <= m.TIMESTEPS._bounds[1] - g.l_dsm:
@@ -90,11 +96,13 @@ class SinkDsmBlock(SimpleBlock):
         # # m.n == efficiency factor set to "n=1"
 
         def dsmupdo_constraint_rule(block):
+
             for t in m.TIMESTEPS:
                 for g in group:
 
                     if t <= g.l_dsm:
-                        return sum(self.DSMdo[g, t, T] for T in range(1, t + g.l_dsm + 1))\
+
+                        return sum(self.DSMdo[g, t, T] for T in range(t + g.l_dsm + 1))\
                                == self.DSMup[g, t] # * m.n
 
                     elif g.l_dsm < t <= m.TIMESTEPS._bounds[1] - g.l_dsm:
@@ -103,22 +111,104 @@ class SinkDsmBlock(SimpleBlock):
                                == m.DSMup[t] # * m.n
 
                     else:
-                        return sum(self.DSMdo[g, t, T] for T in range(t - g.l_dsm, m.TIMESTEPS._bounds[1]+2))\
+
+                        return sum(self.DSMdo[g, t, T] for T in range(t - g.l_dsm, m.TIMESTEPS._bounds[1] + 1))\
                                == self.DSMup[g, t] # * m.n
 
-        self.dsmupdo_constraint = Constraint(group, m.TIMESTEPS,
-                                                noruleinit=True)
-        self.dsmupdo_constraint_build = BuildAction(
-            rule= dsmupdo_constraint_rule)
+        self.dsmupdo_constraint = Constraint(group, m.TIMESTEPS, noruleinit=True)
+        self.dsmupdo_constraint_build = BuildAction(rule= dsmupdo_constraint_rule)
 
         # Equation 8
 
-        #def dsmup_constraint_rule(block):
+        def dsmup_constraint_rule(block):
+
+            for t in m.TIMESTEPS:
+                for g in group:
+                    #return self.DSMup[g, t] <= g.c_do[t]
+                    return (None, self.DSMup[g,t], g.c_do[t])
+
+        self.dsmup_constraint = Constraint(group, m.TIMESTEPS, noruleinit=True)
+        self.dsmup_constraint_build = BuildAction(rule= dsmup_constraint_rule)
 
 
+        # Equation 9
 
-            #return self.DSMup[g, t] <= m.Cup[t-1]
+        def dsmdo_constraint_rule(block):
 
+            for T in m.TIMESTEPS:
+                for g in group:
+
+                    if T <= g.l_dsm:
+
+                        #return sum(self.DSMdo[g, t, T] for t in range(T + g.l_dsm + 1)) \
+                        #    <= g.c_do[T]
+
+                        return (None,
+                                sum(self.DSMdo[g, t, T] for t in range(T + g.l_dsm + 1)),
+                                g.c_do[T])
+
+                    elif g.l_dsm < T <= m.TIMESTEPS._bounds[1] - g.l_dsm:
+
+                        #return sum(self.DSMdo[g, t, T] for t in range(T - g.l_dsm, T + g.l_dsm + 1))\
+                        #       <= g.c_do[T]
+
+                        return (None,
+                                sum(self.DSMdo[g, t, T] for t in range(T - g.l_dsm, T + g.l_dsm + 1)),
+                                g.c_do[T])
+
+                    else:
+
+                        #return sum(self.DSMdo[g, t, T] for t in range(T - g.l_dsm, m.TIMESTEPS._bounds[1] +1)) \
+                        #    <= g.c_do[T]
+
+                        return (None,
+                                sum(self.DSMdo[g, t, T] for t in range(T - g.l_dsm, m.TIMESTEPS._bounds[1] + 1)),
+                                g.c_do[T])
+
+        self.dsmdo_constraint = Constraint(group, m.TIMESTEPS, noruleinit=True)
+        self.dsmdo_constraint_build = BuildAction(rule=dsmdo_constraint_rule)
+
+
+        # Equation 10
+
+        def C2_constraint_rule(block):
+
+            for T in m.TIMESTEPS:
+                for g in group:
+
+                    if T <= g.l_dsm:
+
+                        #return max(g.c_up[T], g.c_do[T]) >= self.DSMup[g, T] + sum(
+                        #    self.DSMdo[g, t, T] for t in range(T + g.l_dsm + 1))
+
+                        return (None,
+                                self.DSMup[g, T] + sum(self.DSMdo[g, t, T] for t in range(T + g.l_dsm + 1)),
+                                max(g.c_up[T], g.c_do[T]))
+
+                    elif g.l_dsm < T <= m.TIMESTEPS._bounds[1] - g.l_dsm:
+
+                        #return max(g.c_up[T], g.c_do[T]) >= self.DSMup[g, T] + sum(
+                        #    self.DSMdo[g, t, T] for t in range(T - g.l_dsm, T + g.l_dsm + 1))
+
+                        return (None,
+                                self.DSMup[g, T] + sum(self.DSMdo[g, t, T] for t in range(T - g.l_dsm, T + g.l_dsm + 1)),
+                                max(g.c_up[T], g.c_do[T]))
+
+                    else:
+
+                        #return max(g.c_up[T], g.c_do[T]) >= self.DSMup[g, T] + sum(
+                        #    self.DSMdo[g, t, T] for t in range(T - g.l_dsm, m.TIMESTEPS._bounds[1] +1))
+
+                        return (None,
+                                self.DSMup[g, T] + sum(self.DSMdo[g, t, T] for t in range(T - g.l_dsm, m.TIMESTEPS._bounds[1] + 1)),
+                                max(g.c_up[T], g.c_do[T]))
+
+        # Equation 11
+
+        self.C2_constraint = Constraint(group, m.TIMESTEPS, noruleinit=True)
+        self.C2_constraint_build = BuildAction(rule=C2_constraint_rule)
+
+        # Recovery rule missing
 
 
 #################################################################
@@ -156,8 +246,8 @@ def create_model(data, timesteps):
     # Create DSM sink
     demand_dsm = SinkDsm(label='demand_dsm',
                          inputs={b_elec: solph.Flow()},
-                         c_up=data['C_up'] * 10,
-                         c_do=data['C_do'] * 10,
+                         c_up=data['Cap_up'] * 10,
+                         c_do=data['Cap_do'] * 10,
                          l_dsm=3,
                          demand=data['demand_el'] * 100)
 
@@ -180,13 +270,17 @@ def create_model(data, timesteps):
     return m
 
 
-#if __name__ == '__main__':
-# Input Data & Timesteps
+
+#################################################################
+# ----------------- Input Data & Timesteps ----------------------------
 
 # Provide Data
-filename = os.path.join(os.path.dirname(__file__), './Input/input_data.csv')
-data = pd.read_csv(filename, sep=",", dtype=float)
-timesteps = 10
+filename = os.path.join(os.path.dirname(__file__), './Input/input_new.csv')
+data = pd.read_csv(filename, sep=",")
+
+# Timesteps
+timesteps = 15
+
 
 # Create & Solve Model
 model = create_model(data, timesteps)
@@ -195,31 +289,26 @@ model = create_model(data, timesteps)
 es = solph.EnergySystem()
 es.restore(dpath=None, filename=None)
 
-# Show Results
+# Get output data
 b_coal = outputlib.views.node(model.es.results['main'], 'bus_coal')
 b_elec = outputlib.views.node(model.es.results['main'], 'bus_elec')
 b_dsm = outputlib.views.node(es.results['main'], 'demand_dsm')
 
-
-#print('-----------------------------------------------------')
-#print('Bus Coal\n', b_coal['sequences'])
-
-print('-----------------------------------------------------')
-print('OBJ: ', model.objective())
-#print('-----------------------------------------------------')
-#print('Bus Elec\n', b_elec['sequences'])
-
+# Sum dsmdo
 dsmdo = []
 dsmup = []
 for k in range(timesteps):
     dsmdo.append(b_dsm['sequences'].iloc[k, 1:-1].sum())
     dsmup.append(b_dsm['sequences'].iloc[k, -1])
 
-
-
 df_output = pd.DataFrame(data = dsmdo, columns=['DSM_do'])
 df_output['demand'] = data.demand_el.iloc[:timesteps]*100
 
+
+# Show Output Data
+
+print('-----------------------------------------------------')
+print('OBJ: ', model.objective())
 print('-----------------------------------------------------')
 print(b_dsm['sequences'].iloc[:, 0])
 print('-----------------------------------------------------')
@@ -228,16 +317,13 @@ print('-----------------------------------------------------')
 print(b_elec['sequences'].iloc[:, 1])
 print('-----------------------------------------------------')
 print(df_output)
-print(dsmup)
-#print('-----------------------------------------------------')
-#print(b_elec['sequences'].iloc[:, 2])
-
-#results = outputlib.processing.results(model)
-#print(type(list(results)[0]))
+print('------------------TOTAL------------------------')
+print(df_output.sum())
 
 
-# key in b_elec.iteritems():
-    #print(key)
+
+
+
 
 #import pdb;    pdb.set_trace()
 
