@@ -1,6 +1,5 @@
 from oemof import solph, outputlib
-#from oemof.network import Node
-from oemof import network
+from oemof.network import Node
 import pandas as pd
 import os
 from pyomo.core.base.block import SimpleBlock
@@ -8,23 +7,21 @@ from pyomo.environ import (Binary, Set, NonNegativeReals, Var, Constraint,
                            Expression, BuildAction, Piecewise)
 
 
-class SinkDsm(network.Transformer):
+class SinkDsm(solph.Sink):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.c_up = kwargs.get('c_up', 4)
-        self.c_do = kwargs.get('c_do', 4)
-        self.l_dsm = kwargs.get('l-dsm', 4)
-        #self.demand = kwargs.get
-
-        self.demand_resulting = [100,200,300,400,500]
-
-
-
+        self.c_up = kwargs.get('c_up', None)
+        self.c_do = kwargs.get('c_do', None)
+        self.l_dsm = kwargs.get('l_dsm', None)
+        self.demand = kwargs.get('demand', None)
 
     def constraint_group(self):
         return SinkDsmBlock
+
+    def show_input(self):
+        return print(self.c_up)
 
 
 class SinkDsmBlock(SimpleBlock):
@@ -34,93 +31,75 @@ class SinkDsmBlock(SimpleBlock):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-
     def _create(self, group=None):
-
         if group is None:
             return None
 
-        i = {n: [i for i in n.inputs][0] for n in group}
-        o = {n: [o for o in n.outputs][0] for n in group}
-
-        #self.DSM = Set(initialize=[n for n in group])
+        m = self.parent_block()
 
 
+        for n in group:
+            n.inflow = list(n.inputs)[0]
 
+        def _input_output_relation_rule(block):
+            """Connection between input and internal demand.
+            """
+            for t in m.TIMESTEPS:
+                for g in group:
+                    lhs = m.flow[g.inflow, g, t]
+                    rhs = g.demand[t]
+                    block.input_output_relation.add((g, t), (lhs == rhs))
 
+        self.input_output_relation = Constraint(group, m.TIMESTEPS,
+                                                noruleinit=True)
+        self.input_output_relation_build = BuildAction(
+            rule=_input_output_relation_rule)
 
 
 #################################################################
 
 
-def create_model(df_data, timesteps):
+def create_model(data, timesteps):
     # Adjust Timesteps
     timesteps = pd.date_range('1/1/2019', periods=timesteps, freq='H')
 
     # Create Energy System
     es = solph.EnergySystem(timeindex=timesteps)
-    network.Node.registry = es
+    Node.registry = es
 
-    # Data Manipulation
-    df_data = df_data
 
     # Create Busses
-    #b_coal = solph.Bus(label='bus_coal')
+    b_coal = solph.Bus(label='bus_coal')
     b_elec = solph.Bus(label='bus_elec')
 
+
     # Create Sources
-    #s_coal = solph.Source(label='source_coal',
-    #                      outputs={b_coal: solph.Flow(
-    #                          nominal_value=200)})
-
-    s_shortage_el = solph.Source(label='shortage_el',
-                         outputs={b_elec: solph.Flow(
-                             variable_costs=200)})
-
-    s_wind = solph.Source(label='wind',
-                          outputs={b_elec: solph.Flow(
-                              actual_value=df_data['wind'],
-                              fixed=True,
-                              nominal_value=100)})
-
-
-
-
-    # Create Sink
-
-    demand = solph.Sink(label='demand',
-                        inputs={b_elec: solph.Flow(
-                            actual_value=df_data['demand_el'],
-                            fixed=True,
-                            nominal_value=100)})
-
-    #'''
-    demand_dsm = SinkDsm(label='demand_dsm',
-                         inputs={b_elec: solph.Flow()},
-                         outputs={b_elec: solph.Flow()},
-                         c_up = 2,
-                         c_do = 2,
-                         l_dsm = 2,
-                         demand = df_data['demand_el'])
-
-    #'''
-
-
-
-    # excess variable
-    excess = solph.Sink(label='excess_el', inputs={b_elec: solph.Flow()})
-
-
+    s_coal = solph.Source(label='source_coal',
+                         outputs={b_coal: solph.Flow(
+                             nominal_value=1000)})
 
 
     # Create Transformer
+    cfp = solph.Transformer(label='pp_coal',
+                           inputs={b_coal: solph.Flow()},
+                           outputs={b_elec: solph.Flow(
+                               variable_costs=50)},
+                           conversion_factors={b_elec: 0.5})
 
-    #cfp = solph.Transformer(label='pp_coal',
-    #                        inputs={b_coal: solph.Flow()},
-    #                        outputs={b_elec: solph.Flow(
-    #                            variable_costs=50)},
-    #                        conversion_factors={b_elec: 0.5})
+    # # Create Sink
+    # demand = solph.Sink(label='demand',
+    #                     inputs={b_elec: solph.Flow(
+    #                         actual_value=data['demand_el'],
+    #                         fixed=True,
+    #                         nominal_value=100)})
 
+    # Create DSM sink
+    demand_dsm = SinkDsm(label='demand_dsm',
+                         inputs={b_elec: solph.Flow()},
+                         c_up = 2,
+                         c_do = 2,
+                         l_dsm = 2,
+                         demand=data['demand_el'] * 100)
 
 
     # Create Model
@@ -146,22 +125,19 @@ def create_model(df_data, timesteps):
 
 # Provide Data
 filename = os.path.join(os.path.dirname(__file__), './Input/input_data.csv')
-df_data = pd.read_csv(filename, sep=",")
+data = pd.read_csv(filename, sep=",")
 timesteps = 1
 
 # Create & Solve Model
-model = create_model(df_data, timesteps)
+model = create_model(data, timesteps)
 
 # Get Results
 es = solph.EnergySystem()
 es.restore(dpath=None, filename=None)
 
-
-
 # Show Results
-
-#b_coal = outputlib.views.node(es.results['main'], 'bus_coal')
-#b_elec = outputlib.views.node(es.results['main'], 'bus_elec')
+b_coal = outputlib.views.node(model.es.results['main'], 'bus_coal')
+b_elec = outputlib.views.node(model.es.results['main'], 'bus_elec')
 b_dsm = outputlib.views.node(es.results['main'], 'demand_dsm')
 b_demand = outputlib.views.node(es.results['main'], 'demand')
 b_wind = outputlib.views.node(es.results['main'], 'wind')
