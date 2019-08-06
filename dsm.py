@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 ##########
 
 
-def create_model(df_data,df_dsm,  timesteps):
+def create_model(df_data,  timesteps):
 
 	m = ConcreteModel()
 
@@ -23,7 +23,7 @@ def create_model(df_data,df_dsm,  timesteps):
 	m.tm = RangeSet(1,timesteps+1,1) # TimePeriod  (Hours)
 	m.Tm = RangeSet(1,timesteps+1,1) # TimePeriod (Hours)(in paper tt)
 
-	m.L = 3 # Delay Time (Hours)
+	m.L = 1 # Delay Time (Hours)
 	m.n = 1	# Zerrahn Parameter eta (---)
 	m.R = 1	# Zerrahn Parameter Recovery (Hours)
 
@@ -39,16 +39,16 @@ def create_model(df_data,df_dsm,  timesteps):
 
 	#################### For OBJECTIVE
 
-	factor_demand = 200
+	factor_demand = 1
 	temp = df_data.demand_el[:timesteps + 1] * factor_demand
 	m.Demand = temp.tolist()  # Demand from input_data
 
-	m.Cdo = (df_dsm.Cap_do*1000).round().tolist()
-	m.Cup = (df_dsm.Cap_up*1000).round().tolist()
+	m.Cdo = (df_data.Cap_do*1000).round().tolist()
+	m.Cup = (df_data.Cap_up*1000).round().tolist()
 
 	m.C = [0, 10, 20, 40]  # Cost constant of all Power Generators, P1, P2, P3, ...
 
-	m.Cap = [100, 100, 100, 70]  # Capacity of all Generators Wind/PV, P1, P2, P3, ...
+	m.Cap = [1, 100, 100, 70]  # Capacity of all Generators Wind/PV, P1, P2, P3, ...
 
 	m.Wind = (df_data.wind * m.Cap[0]).round().tolist()
 	m.PV = (df_data.pv * m.Cap[0]).round().tolist()
@@ -265,7 +265,7 @@ def output(m):
 	#plt.fill_between(range(timesteps+1), df.P3 + df.P2 + df.P1, df.P3 + df.P2 + df.P1 + df.DSM_tot, alpha=0.5,  label='DSM', color='yellow')
 	#plt.fill_between(range(timesteps+1), df.Demand, df.Demand + df.DSM_tot, alpha=0.5,  label='DSM', color='lightcoral')
 
-	plt.yticks(range(0, round(max(df.Demand) * 1.1), 10))
+	#plt.yticks(range(0, round(max(df.Demand) * 1.1), 10))
 
 
 	plt.grid()
@@ -307,16 +307,18 @@ def output(m):
 
 # START
 
-df_data = pd.read_csv('Input/input_data.csv', sep = ",")
-df_dsm = pd.read_csv('dsm_capacity_timeseries.csv')#, sep = ",")
-#df_dsm = pd.read_csv('Input/dsm_capacity_random_timeseries.csv', sep = ",", encoding='utf-8')
+#df_data = pd.read_csv('Input/input_new.csv', sep = ",")
+df_data = pd.read_csv('./oemof_dsm_test_guido.csv', sep = ",")
+#df_data = pd.read_csv('dsm_capacity_timeseries.csv')#, sep = ",")
+#df_data = pd.read_csv('Input/dsm_capacity_random_timeseries.csv', sep = ",", encoding='utf-8')
 
 
+df_data = 100 * df_data
 
-timesteps = 120
+timesteps = 5
 
 
-m = create_model(df_data, df_dsm,  timesteps)
+m = create_model(df_data,  timesteps)
 
 
 # Constraints
