@@ -3,7 +3,7 @@ from oemof.network import Node
 import pandas as pd
 import os
 
-import DSM_component as oemof_dsm
+import oemof_DSM_component as oemof_dsm
 
 import matplotlib.pyplot as plt
 
@@ -95,6 +95,11 @@ def extract_results(model, timesteps, data):
     dsmtot = df_dsm_tot.values
 
     # Generators from model
+    ### only testcase
+    #shortage = df_shortage.values
+    #wind = df_shortage.values + df_wind.values
+    # only testcase
+
     graph_coal1 = df_coal_1.values
     graph_coal2 = graph_coal1 + df_coal_2.values
     graph_wind = graph_coal2 + df_wind.values
@@ -110,34 +115,45 @@ def extract_results(model, timesteps, data):
 
     # Demands
     #ax1.plot(range(timesteps), dsm, label='demand_DSM', color='black')
-    ax1.plot(range(timesteps), demand, label='Demand', linestyle='--', color='blue')
-    ax1.step(range(timesteps), dsm, where='post', label='demand_DSM', color='black')
+    ax1.step(range(timesteps), demand, where='post', label='Demand', linestyle='--', color='blue')
+    ax1.step(range(timesteps), dsm, where='post', label='Demand after DSM', color='black')
 
     # DSM Capacity
     #ax1.plot(range(timesteps), demand + dsm_capup, label='Cup', color='black', linestyle='--')
     #ax1.plot(range(timesteps), demand - dsm_capdo, label='Cdo', color='black', linestyle='--')
 
-    ax1.plot(range(timesteps), excess, label='Excess', linestyle='--', color='green')
+    ax1.step(range(timesteps), excess,where='post', label='Excess', linestyle='--', color='green')
     #ax1.plot(range(timesteps), graph_excess, label='excess', linestyle='--', color='green')
 
     # Generators
+
+    #ax1.fill_between(range(timesteps), 0, shortage, step='post', label='Shortage', facecolor='grey', alpha=0.5)
+    #ax1.fill_between(range(timesteps), shortage, wind, step='post', label='Wind', facecolor='darkcyan', alpha=0.5)
+
+
+
     ax1.fill_between(range(timesteps), 0, graph_coal1, step='post', label='Coal_1', facecolor='black', alpha=0.5)
     ax1.fill_between(range(timesteps), graph_coal1, graph_coal2, step='post', label='Coal_2', facecolor='grey', alpha=0.5)
     ax1.fill_between(range(timesteps), graph_coal2, graph_wind, step='post', label='Wind', facecolor='darkcyan', alpha=0.5)
     #ax1.fill_between(range(timesteps), graph_wind, graph_pv, label='PV', facecolor='gold', alpha=0.5)
     #ax1.fill_between(range(timesteps), graph_pv, graph_shortage, label='Shortage', facecolor='red', alpha=0.5)
 
-    plt.xticks(range(timesteps))
+
+    plt.xticks(range(0,timesteps,5))
     plt.grid()
     # Legend
-    ax1.legend(bbox_to_anchor=(0., 1.02, 1., .102), loc=3, ncol=4, mode="expand", borderaxespad=0.)
+    handles, labels = ax1.get_legend_handles_labels()
+    handles = [handles[0], handles[1], handles[3], handles[4], handles[2], handles[5]]
+    labels = [labels[0], labels[1], labels[3], labels[4], labels[2], labels[5]]
+
+    ax1.legend(handles,labels, bbox_to_anchor=(0., 1.02, 1., .102), loc=3, ncol=3, mode="expand", borderaxespad=0.)
     # Second axis
     ax2 = ax1.twinx()
     ax2.set_ylim([-100, 100])
 
     # DSM up/down
-    ax2.bar(range(timesteps), -dsmdo, align='edge', label='DSM up/down',  alpha=0.5, color='orange')
-    ax2.bar(range(timesteps), dsmup, align='edge', alpha=0.5, color='black')
+    ax2.bar(range(timesteps), -dsmdo, align='edge', label='DSM down',  alpha=0.5, color='red')
+    ax2.bar(range(timesteps), dsmup, align='edge', label='DSM up', alpha=0.5, color='green')
     #ax2.bar(range(timesteps), -dsmtot, label='DSM up/down',  alpha=0.5, color='firebrick')
 
 
@@ -268,7 +284,7 @@ directory = './Comparisson/'
 
 # Provide Data
 
-oemof_test = directory + 'oemof_dsm_test_generisch_short.csv'
+oemof_test = directory + 'oemof_dsm_test_generisch_short2.csv'
 #oemof_test = directory + 'oemof_dsm_test_generisch_longer.csv'
 input_urbs = './Input/input_new.csv'
 filename_data = os.path.join(os.path.dirname(__file__), oemof_test)
@@ -279,7 +295,7 @@ data = pd.read_csv(filename_data, sep=",", encoding='utf-8')
 data = data * 1e2
 
 # Timesteps
-timesteps = 25
+timesteps = 15
 
 # Create & Solve Model
 model = create_model(data, timesteps)
