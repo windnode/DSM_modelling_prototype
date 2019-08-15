@@ -12,7 +12,6 @@ import matplotlib.pyplot as plt
 #################################################################
 #                       Output Graph
 
-
 def adjust_yaxis(ax, ydif, v):
     """shift axis ax by ydiff, maintaining point v at the same location"""
     inv = ax.transData.inverted()
@@ -39,34 +38,45 @@ def align_yaxis(ax1, v1, ax2, v2):
 def extract_results(model, timesteps, data):
     '''Extract data fro Pyomo Variables in DataFrames and plot for visualization'''
 
-    # ########################### Get DataFrame out of Pyomo
+    # ########################### Get DataFrame out of Pyomo and rename series
 
     # Generators
     df_coal_1 = outputlib.views.node(model.es.results['main'], 'bus_elec')['sequences'][
         (('pp_coal_1', 'bus_elec'), 'flow')]
+    df_coal_1.rename('coal1', inplace=True)
     df_coal_2 = outputlib.views.node(model.es.results['main'], 'bus_elec')['sequences'][
         (('pp_coal_2', 'bus_elec'), 'flow')]
+    df_coal_2.rename('coal2', inplace=True)
     df_wind = outputlib.views.node(model.es.results['main'], 'bus_elec')['sequences'][
         (('wind', 'bus_elec'), 'flow')]
+    df_wind.rename('wind', inplace=True)
     df_pv = outputlib.views.node(model.es.results['main'], 'bus_elec')['sequences'][
         (('pv', 'bus_elec'), 'flow')]
+    df_pv.rename('pv', inplace=True)
     df_shortage = outputlib.views.node(model.es.results['main'], 'bus_elec')['sequences'][
         (('shortage_el', 'bus_elec'), 'flow')]
+    df_shortage.rename('shortage', inplace=True)
     df_excess = outputlib.views.node(model.es.results['main'], 'bus_elec')['sequences'][
         (('bus_elec', 'excess_el'), 'flow')]
+    df_excess.rename('excess', inplace=True)
 
     # DSM Demand
     df_dsm = outputlib.views.node(model.es.results['main'], 'bus_elec')['sequences'][
         (('bus_elec', 'demand_dsm'), 'flow')]
+    df_dsm.rename('dsm', inplace=True)
 
     # DSM Variables
     df_dsmdo = outputlib.views.node(model.es.results['main'], 'demand_dsm')['sequences'].iloc[:, 1:-1].sum(axis=1)
+    df_dsmdo.rename('dsm_do', inplace=True)
     df_dsmup = outputlib.views.node(model.es.results['main'], 'demand_dsm')['sequences'].iloc[:, -1]
-
+    df_dsmup.rename('dsm_up', inplace=True)
+    df_dsm_tot = df_dsmdo - df_dsmup
+    df_dsm_tot.rename('dsm_tot', inplace=True)
     # Merge in one DataFrame
-    df_total = pd.concat([df_coal_1, df_coal_2, df_dsm, df_pv, df_wind, df_dsmdo, df_dsmup], axis=1)
+    df_total = pd.concat([df_coal_1, df_coal_2, df_dsm, df_pv, df_wind, df_dsmdo, df_dsmup, df_dsm_tot], axis=1)
 
-    #df_gesamt.to_csv('dsm.csv')
+    # write Data in Csv
+    #df_gesamt.to_csv('DSM_component_data.csv')
 
     # ############ DATA PREPARATION FOR FIGURE #############################
 
@@ -82,6 +92,7 @@ def extract_results(model, timesteps, data):
     dsm = df_dsm.values
     dsmup = df_dsmup.values
     dsmdo = df_dsmdo.values
+    dsmtot = df_dsm_tot.values
 
     # Generators from model
     graph_coal1 = df_coal_1.values
@@ -112,8 +123,8 @@ def extract_results(model, timesteps, data):
     ax1.fill_between(range(timesteps), 0, graph_coal1, label='Coal_1', facecolor='black', alpha=0.5)
     ax1.fill_between(range(timesteps), graph_coal1, graph_coal2, label='Coal_2', facecolor='grey', alpha=0.5)
     ax1.fill_between(range(timesteps), graph_coal2, graph_wind, label='Wind', facecolor='darkcyan', alpha=0.5)
-    ax1.fill_between(range(timesteps), graph_wind, graph_pv, label='PV', facecolor='gold', alpha=0.5)
-    ax1.fill_between(range(timesteps), graph_pv, graph_shortage, label='Shortage', facecolor='red', alpha=0.5)
+    #ax1.fill_between(range(timesteps), graph_wind, graph_pv, label='PV', facecolor='gold', alpha=0.5)
+    #ax1.fill_between(range(timesteps), graph_pv, graph_shortage, label='Shortage', facecolor='red', alpha=0.5)
 
     # Legend
     ax1.legend(bbox_to_anchor=(0., 1.02, 1., .102), loc=3, ncol=4, mode="expand", borderaxespad=0.)
@@ -123,8 +134,10 @@ def extract_results(model, timesteps, data):
     ax2.set_ylim([-100, 100])
 
     # DSM up/down
-    ax2.bar(range(timesteps), dsmdo, label='DSM up/down',  alpha=0.5, color='firebrick')
-    ax2.bar(range(timesteps), -dsmup, alpha=0.5, color='firebrick')
+    ax2.bar(range(timesteps), -dsmdo, label='DSM up/down',  alpha=0.5, color='orange')
+    ax2.bar(range(timesteps), dsmup, alpha=0.5, color='black')
+    #ax2.bar(range(timesteps), -dsmtot, label='DSM up/down',  alpha=0.5, color='firebrick')
+
 
     # DSM Capacity
     ax2.plot(range(timesteps), dsm_capup, label='Capacity DSM up/down', color='red', linestyle='--')
@@ -132,10 +145,10 @@ def extract_results(model, timesteps, data):
     align_yaxis(ax1, 100, ax2, 0)
 
     # Legend
-    ax2.legend(bbox_to_anchor=(0., -0.15, 1., 0.102), loc=3, ncol=2,  borderaxespad=0., mode="expand")
+    ax2.legend(bbox_to_anchor=(0., -0.15, 1., 0.102), loc=3, ncol=3,  borderaxespad=0., mode="expand")
     #ax2.grid()
     fig1.set_tight_layout(True)
-    fig1.savefig('./Grafiken/oemof_dsm.png')
+    fig1.savefig(directory + 'Grafiken/oemof_dsm.png')
 
     return df_total
 
@@ -209,7 +222,7 @@ def create_model(data, timesteps):
                                    inputs={b_elec: solph.Flow()},
                                    c_up=data['Cap_up'],
                                    c_do=data['Cap_do'],
-                                   delay_time=1,
+                                   delay_time=2,
                                    demand=data['demand_el']
                                    )
 
@@ -235,7 +248,7 @@ def create_model(data, timesteps):
     m.solve(solver='cbc', solve_kwargs={'tee': False})
 
     # Write LP File
-    filename = os.path.join(os.path.dirname(__file__), 'oemof_dsm_test.lp')
+    filename = os.path.join(os.path.dirname(__file__), directory, 'oemof_dsm_test.lp')
     m.write(filename, io_options={'symbolic_solver_labels': True})
 
     # Save Results
@@ -245,14 +258,16 @@ def create_model(data, timesteps):
 
     return m
 
-
-
 # ################################################################
 # ----------------- Input Data & Timesteps ----------------------------
 
+
+directory = './Comparisson/'
+
 # Provide Data
 
-oemof_test = 'oemof_dsm_test.csv'
+oemof_test = directory + 'oemof_dsm_test_generisch_short.csv'
+#oemof_test = directory + 'oemof_dsm_test_generisch_longer.csv'
 input_urbs = './Input/input_new.csv'
 filename_data = os.path.join(os.path.dirname(__file__), oemof_test)
 
@@ -275,11 +290,14 @@ es.restore(dpath=None, filename=None)
 # Plot
 df_result = extract_results(model, timesteps, data)
 
+
 # Show Output Data
 '''
 DSMup = positiv, additional load is called from the grid  -> total demand rises
 DSMdo = positiv, less load is called from the grid -> total demand  drops 
 '''
+
+
 
 print('-----------------------------------------------------')
 print('OBJ: ', model.objective())
@@ -287,26 +305,20 @@ print('OBJ: ', model.objective())
 
 print('-----------------------------------------------------')
 #print(df_result[ (('pp_coal_2', 'bus_elec'), 'flow') ])
-print('-----------------------------------------------------')
-print(df_result[ (('bus_elec', 'demand_dsm'), 'flow') ])
+#print('-----------------------------------------------------')
+#print(df_result[ (('bus_elec', 'demand_dsm'), 'flow') ])
 #print('-----------------------------------------------------')
 #print(df_result[ (('pv', 'bus_elec'), 'flow') ])
 #print('-----------------------------------------------------')
 #print(df_result[ (('wind', 'bus_elec'), 'flow') ])
 print('-----------------------------------------------------')
-print(df_result[ (('demand_dsm', 'None'), 'DSMup')] )
+print(df_result[['dsm_up', 'dsm_do', 'dsm_tot', 'dsm' ]] )
+
 print('------------------TOTAL------------------------')
 print('DSMup')
-print(df_result[ (('demand_dsm', 'None'), 'DSMup')].sum())
+print(df_result['dsm_up'].sum())
 print('DSMdown')
-print(df_result[0].sum())
-
-
-
-
-
-
-
+print(df_result['dsm_do'].sum())
 
 #import pdb;    pdb.set_trace()
 
