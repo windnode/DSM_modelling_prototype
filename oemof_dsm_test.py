@@ -109,8 +109,9 @@ def extract_results(model, timesteps, data):
     ax1.set_ylim([0, 200])
 
     # Demands
-    ax1.plot(range(timesteps), dsm, label='demand_DSM', color='black')
+    #ax1.plot(range(timesteps), dsm, label='demand_DSM', color='black')
     ax1.plot(range(timesteps), demand, label='Demand', linestyle='--', color='blue')
+    ax1.step(range(timesteps), dsm, where='post', label='demand_DSM', color='black')
 
     # DSM Capacity
     #ax1.plot(range(timesteps), demand + dsm_capup, label='Cup', color='black', linestyle='--')
@@ -120,22 +121,23 @@ def extract_results(model, timesteps, data):
     #ax1.plot(range(timesteps), graph_excess, label='excess', linestyle='--', color='green')
 
     # Generators
-    ax1.fill_between(range(timesteps), 0, graph_coal1, label='Coal_1', facecolor='black', alpha=0.5)
-    ax1.fill_between(range(timesteps), graph_coal1, graph_coal2, label='Coal_2', facecolor='grey', alpha=0.5)
-    ax1.fill_between(range(timesteps), graph_coal2, graph_wind, label='Wind', facecolor='darkcyan', alpha=0.5)
+    ax1.fill_between(range(timesteps), 0, graph_coal1, step='post', label='Coal_1', facecolor='black', alpha=0.5)
+    ax1.fill_between(range(timesteps), graph_coal1, graph_coal2, step='post', label='Coal_2', facecolor='grey', alpha=0.5)
+    ax1.fill_between(range(timesteps), graph_coal2, graph_wind, step='post', label='Wind', facecolor='darkcyan', alpha=0.5)
     #ax1.fill_between(range(timesteps), graph_wind, graph_pv, label='PV', facecolor='gold', alpha=0.5)
     #ax1.fill_between(range(timesteps), graph_pv, graph_shortage, label='Shortage', facecolor='red', alpha=0.5)
 
+    plt.xticks(range(timesteps))
+    plt.grid()
     # Legend
     ax1.legend(bbox_to_anchor=(0., 1.02, 1., .102), loc=3, ncol=4, mode="expand", borderaxespad=0.)
-
     # Second axis
     ax2 = ax1.twinx()
     ax2.set_ylim([-100, 100])
 
     # DSM up/down
-    ax2.bar(range(timesteps), -dsmdo, label='DSM up/down',  alpha=0.5, color='orange')
-    ax2.bar(range(timesteps), dsmup, alpha=0.5, color='black')
+    ax2.bar(range(timesteps), -dsmdo, align='edge', label='DSM up/down',  alpha=0.5, color='orange')
+    ax2.bar(range(timesteps), dsmup, align='edge', alpha=0.5, color='black')
     #ax2.bar(range(timesteps), -dsmtot, label='DSM up/down',  alpha=0.5, color='firebrick')
 
 

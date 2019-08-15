@@ -23,7 +23,7 @@ def create_model(df_data,  timesteps):
 	m.tm = RangeSet(1,timesteps+1,1) # TimePeriod  (Hours)
 	m.Tm = RangeSet(1,timesteps+1,1) # TimePeriod (Hours)(in paper tt)
 
-	m.L = 1 # Delay Time (Hours)
+	m.L = 5 # Delay Time (Hours)
 	m.n = 1	# Zerrahn Parameter eta (---)
 	m.R = 1	# Zerrahn Parameter Recovery (Hours)
 
@@ -43,8 +43,8 @@ def create_model(df_data,  timesteps):
 	temp = df_data.demand_el[:timesteps + 1] * factor_demand
 	m.Demand = temp.tolist()  # Demand from input_data
 
-	m.Cdo = (df_data.Cap_do*1000).round().tolist()
-	m.Cup = (df_data.Cap_up*1000).round().tolist()
+	m.Cdo = (df_data.Cap_do).tolist()
+	m.Cup = (df_data.Cap_up).tolist()
 
 	m.C = [0, 10, 20, 40]  # Cost constant of all Power Generators, P1, P2, P3, ...
 
@@ -250,7 +250,7 @@ def output(m):
 
 	# Demands +- DSM
 
-	ax1.plot(df.Demand[:timesteps] + df.DSM_tot, label='new_Demand')#, linestyle='--')
+	ax1.plot(df.Demand[:timesteps] + df.DSM_tot, label='new_Demand', color='black')#, linestyle='--')
 
 	# Generation fossil
 
@@ -267,17 +267,19 @@ def output(m):
 
 	#plt.yticks(range(0, round(max(df.Demand) * 1.1), 10))
 
-
-	plt.grid()
+	ax1.set_ylim([0, 200])
+	#plt.grid()
 
 	# 2nc scale
 
 	ax2 = ax1.twinx()
-
+	ax2.set_ylim([-100, 100])
 	# DSM only
 
-	ax2.bar(range(timesteps+1),  df.DSM_delayed, alpha=0.7, color='firebrick', label='DSM_delayed')
-	ax2.bar(range(timesteps+1), df.DSM_tot, alpha=0.7, label='DSM', color='darkorange')
+	#ax2.bar(range(timesteps+1),  df.DSM_delayed, alpha=0.7, color='firebrick', label='DSM_delayed')
+	#ax2.bar(range(timesteps+1), df.DSM_tot, alpha=0.7, label='DSM', color='darkorange')
+	ax2.bar(range(timesteps + 1), -df.DSMdo, alpha=0.5, label='DSMup', color='darkorange')
+	ax2.bar(range(timesteps + 1), df.DSMup, alpha=0.5, label='DSMdown', color='black')
 
 	# Capacity DSM
 	'''
@@ -294,10 +296,10 @@ def output(m):
 	ax2.scatter(range(timesteps+1), m.Cup[:timesteps+1], marker='_', color='darkorange')
 
 	fig.legend(loc=9, ncol=5)
-	align_yaxis(ax1,60, ax2,0)
+	align_yaxis(ax1,100, ax2,0)
 	#plt.grid()
 
-	fig.savefig('DSM.png', bbox_inches='tight')
+	fig.savefig('./Comparisson/Grafiken/DSM_pyomo.png', bbox_inches='tight')
 
 	return print(df)
 
@@ -307,15 +309,17 @@ def output(m):
 
 # START
 
+
+df_data = pd.read_csv('./Comparisson/oemof_dsm_test_generisch_longer.csv', sep = ",")
+
 #df_data = pd.read_csv('Input/input_new.csv', sep = ",")
-df_data = pd.read_csv('./oemof_dsm_test_guido.csv', sep = ",")
 #df_data = pd.read_csv('dsm_capacity_timeseries.csv')#, sep = ",")
 #df_data = pd.read_csv('Input/dsm_capacity_random_timeseries.csv', sep = ",", encoding='utf-8')
 
 
-df_data = 100 * df_data
+df_data = 1e2 * df_data
 
-timesteps = 5
+timesteps = 90
 
 
 m = create_model(df_data,  timesteps)
@@ -325,8 +329,6 @@ m = create_model(df_data,  timesteps)
 
 # Demand
 m.demandConstraint = Constraint(m.tm, rule=demand_constraint_rule)
-
-
 # Equation 7'
 m.dsmupdoConstraint = Constraint(m.tm, rule=dsmupdo_constraint_rule)
 # Equation 8
@@ -363,7 +365,7 @@ print('Objective:', m.obj())
 output(m)
 
 
-filename = os.path.join(os.path.dirname(__file__), 'model.lp')
+filename = os.path.join(os.path.dirname(__file__), './Comparisson/dsm_pyomo.lp')
 m.write(filename, io_options={'symbolic_solver_labels': True})
 
 #import pdb;    pdb.set_trace()
