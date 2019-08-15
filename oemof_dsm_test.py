@@ -163,7 +163,11 @@ def extract_results(model, timesteps, data):
     align_yaxis(ax1, 100, ax2, 0)
 
     # Legend
-    ax2.legend(bbox_to_anchor=(0., -0.15, 1., 0.102), loc=3, ncol=3,  borderaxespad=0., mode="expand")
+    ax2.legend(bbox_to_anchor=(0., -0.3, 1., 0.102), loc=3, ncol=3,  borderaxespad=0., mode="expand")
+    ax1.set_xlabel('Time t in h')
+    ax1.set_ylabel('MW')
+    ax2.set_ylabel('MW')
+
     #ax2.grid()
     fig1.set_tight_layout(True)
     fig1.savefig(directory + 'Grafiken/oemof_dsm.png')
