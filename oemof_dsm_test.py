@@ -288,7 +288,7 @@ directory = './Comparisson/'
 
 # Provide Data
 
-oemof_test = directory + 'oemof_dsm_test_generisch_short2.csv'
+oemof_test = 'oemof_dsm_test_data.csv'
 #oemof_test = directory + 'oemof_dsm_test_generisch_longer.csv'
 input_urbs = './Input/input_new.csv'
 filename_data = os.path.join(os.path.dirname(__file__), oemof_test)
