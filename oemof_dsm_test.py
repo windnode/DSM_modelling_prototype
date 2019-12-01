@@ -113,84 +113,62 @@ def create_model(data, datetimeindex):
 
     return m
 
-# ################################################################
-# ----------------- Input Data & Timesteps ----------------------------
 
-# Provide Data
-#project = '24h_konzept'
-project = 'recovery-time'
+if __name__ == "__main__":
 
-pltdsm.make_directory(project, subfolder_name='Grafiken')
-#pltdsm.make_directory(project + '/Grafiken')
-directory = './' + project + '/'
+    METHOD = "delay"
+    DELAYTIME = 3
+    INTERVAL = 14
+    timesteps = 14
 
-#file = directory + 'oemof_dsm_test_recovery.csv'
-#file = directory + 'abw_test_timestamp.csv'
-#file = directory + '24_konzept_generisch.csv'
-file = directory + 'recovery.csv'
-filename_data = os.path.join(os.path.dirname(__file__), file)
-
-oemof_test = directory + 'oemof_dsm_test_generisch_short2.csv'
-#oemof_test = directory + 'oemof_dsm_test_generisch_longer.csv'
-input_urbs = './Input/input_new.csv'
-filename_data = os.path.join(os.path.dirname(__file__), oemof_test)
-
-# replace timestamp
-data['timestamp'] = pd.date_range(start='1/1/2013', periods=len(data.index), freq='H')
-data.set_index('timestamp', inplace=True)
-
-# Data manipulation
-data = data
-
-# Timesteps
-timesteps = 58
+    # Provide path to project directory
+    project_dir = os.path.join(os.path.expanduser("~"),
+                               "rli-lokal",
+                               "143_WindNODE",
+                               "fix-wrong-dsn-capacity-constraint-interval-method")
 
 
-# Adjust Timesteps
-
-datetimeindex = pd.date_range(start='1/1/2013', periods=timesteps, freq='H')
-
-
-# Create & Solve Model
-model = create_model(data, datetimeindex)
+    # Data
+    data_filename = "oemof_dsm_test_data_varying_capacity.csv"
 
 
-# Get Results
-es = solph.EnergySystem()
-es.restore(dpath=None, filename=None)
+    os.makedirs(project_dir, exist_ok=True)
+    os.makedirs(os.path.join(project_dir, "Grafiken"), exist_ok=True)
 
+    # get data
+    data_file = os.path.join(os.path.dirname(__file__), data_filename)
+    data = pd.read_csv(data_file)
 
+    # replace timestamp
+    data['timestamp'] = pd.date_range(start='1/1/2013', periods=len(data.index), freq='H')
+    data.set_index('timestamp', inplace=True)
 
-df_gesamt = pltdsm.extract_results(model, data, datetimeindex, directory)
-# Plot
-pltdsm.plot(df_gesamt, datetimeindex, directory, timesteps, project)
+    # Adjust Timesteps
+    datetimeindex = pd.date_range(start='1/1/2013', periods=timesteps, freq='H')
 
+    # Create & Solve Model
+    model = create_model(data, datetimeindex)
 
-# Show Output Data
+    # Get Results
+    es = solph.EnergySystem()
+    es.restore(dpath=None, filename=None)
 
-#print('-----------------------------------------------------')
-#print(df_total[ (('pp_coal_2', 'bus_elec'), 'flow') ])
-#print('-----------------------------------------------------')
-#print(df_total[ (('bus_elec', 'demand_dsm'), 'flow') ])
-#print('-----------------------------------------------------')
-#print(df_total[ (('pv', 'bus_elec'), 'flow') ])
-#print('-----------------------------------------------------')
-#print(df_total[ (('wind', 'bus_elec'), 'flow') ])
-#print(model.es.groups[<class 'oemof_DSM_component.SinkDsmBlock'>].demand)
+    df_gesamt = pltdsm.extract_results(model, data, datetimeindex, project_dir)
+    # Plot
+    pltdsm.plot(df_gesamt, datetimeindex, project_dir, timesteps, METHOD)
 
-print('-----------------------------------------------------')
-print('OBJ: ', model.objective())
-print('-----------------------------------------------------')
+    # Show Output Data
+    print('-----------------------------------------------------')
+    print('OBJ: ', model.objective())
+    print('-----------------------------------------------------')
 
-print(df_gesamt[['dsm_up', 'dsm_do', 'dsm_tot', 'demand_dsm']])
-print('------------------TOTAL------------------------')
+    print(df_gesamt[['dsm_up', 'dsm_do', 'dsm_tot', 'demand_dsm']])
+    print('------------------TOTAL------------------------')
 
-print('DSMup')
-print(df_gesamt['dsm_up'].sum())
+    print('DSMup')
+    print(df_gesamt['dsm_up'].sum())
 
-print('DSMdown')
-print(df_gesamt['dsm_do'].sum())
-
-#import pdb;    pdb.set_trace()
+    print('DSMdown')
+    print(df_gesamt['dsm_do'].sum())
 
 

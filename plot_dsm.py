@@ -251,7 +251,7 @@ def plot(df_gesamt, datetimeindex, directory, timesteps, project):
 
         fig.set_tight_layout(True)
         name = 'Plot_' + project + '_' + info._date_repr + '.png'
-        fig.savefig(directory + 'Grafiken/' + name)
+        fig.savefig(os.path.join(directory, 'Grafiken', name))
         plt.close()
         print(name + ' saved.')
 
