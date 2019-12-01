@@ -3,12 +3,6 @@ from oemof.network import Node
 import pandas as pd
 import os
 
-### DSM Component
-#import oemof_DSM_component_JK as oemof_dsm
-#import oemof_DSM_component as oemof_dsm
-#import oemof_DSM_component_iow as oemof_dsm
-import oemof_DSM as oemof_dsm
-
 # plotting
 import plot_dsm as pltdsm
 
@@ -77,16 +71,15 @@ def create_model(data, datetimeindex):
                               )
 
     # Create DSM
-    demand_dsm = oemof_dsm.SinkDsm(label='demand_dsm',
-                                   inputs={b_elec: solph.Flow(variable_costs=1)},
-                                   c_up=data['Cap_up'][datetimeindex],
-                                   c_do=data['Cap_do'][datetimeindex],
-                                   delay_time=2,
-                                   demand=data['demand_el'][datetimeindex],
-                                   recovery_time=10,
-                                   shift_interval=6,
-                                   method='delay'
-                                   )
+    demand_dsm = solph.custom.SinkDSM(label='demand_dsm',
+                                      inputs={b_elec: solph.Flow()},
+                                      capacity_up=data['Cap_up'][datetimeindex],
+                                      capacity_down=data['Cap_do'][datetimeindex],
+                                      delay_time=DELAYTIME,
+                                      demand=data['demand_el'][datetimeindex],
+                                      shift_interval=INTERVAL,
+                                      method=METHOD,
+                                      cost_dsm_down=2)
 
     # Backup excess / shortage
     excess = solph.Sink(label='excess_el',
@@ -110,8 +103,8 @@ def create_model(data, datetimeindex):
     m.solve(solver='cbc', solve_kwargs={'tee': False})
 
     # Write LP File
-    filename = os.path.join(os.path.dirname(__file__), directory, 'abw_dsm_test.lp')
-    m.write(filename, io_options={'symbolic_solver_labels': True})
+    lp_filename = os.path.join(project_dir, 'SinkDSM.lp')
+    m.write(lp_filename, io_options={'symbolic_solver_labels': True})
 
     # Save Results
     es.results['main'] = outputlib.processing.results(m)
